@@ -1,0 +1,7 @@
+Django<5
+django-cors-headers
+channels[daphne]
+channels_redis
+psycopg2>=2.8
+dj-database-url
+firebase-admin
