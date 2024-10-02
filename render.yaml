@@ -1,0 +1,54 @@
+services:
+  - type: web
+    name: blabhere-frontend
+    repo: https://github.com/KnowYourLines/blabhere-frontend.git
+    env: static
+    buildCommand: ./render.sh
+    staticPublishPath: dist
+    domains:
+      - blabhere.com
+
+  - type: redis
+    name: blabhear-redis
+    region: ohio
+    plan: free
+    ipAllowList: [] # only allow internal connections
+
+  - type: web
+    name: blabhere-backend
+    runtime: docker
+    repo: https://github.com/KnowYourLines/blabhere-backend.git
+    region: ohio
+    plan: free
+    branch: main
+    dockerCommand: ./render.sh
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: DEBUG
+        value: False
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: blabhere-db
+          property: connectionString
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY_ID
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_CLIENT_ID
+        sync: false
+      - key: FIREBASE_CLIENT_CERT_URL
+        sync: false
+
+databases:
+  - name: blabhere-db
+    plan: free
+    region: ohio
+    postgresMajorVersion: 14
+    ipAllowList: [] # only allow internal connections
