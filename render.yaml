@@ -9,7 +9,7 @@ services:
       - blabhere.com
 
   - type: redis
-    name: blabhear-redis
+    name: blabhere-redis
     region: ohio
     plan: free
     ipAllowList: [] # only allow internal connections
