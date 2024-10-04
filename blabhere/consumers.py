@@ -15,6 +15,9 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         await self.accept()
         self.user = self.scope["user"]
 
+    async def disconnect(self, close_code):
+        await self.channel_layer.group_discard(str(self.room_id), self.channel_name)
+
     async def initialize_room(self):
         await self.channel_layer.group_add(self.room_id, self.channel_name)
 
