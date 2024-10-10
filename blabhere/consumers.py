@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import logging
 
 from channels.db import database_sync_to_async
@@ -37,6 +38,19 @@ def add_user_to_room(user, room):
     return member_display_names, was_added
 
 
+def get_initial_messages(room):
+    messages = [
+        {
+            "creator_display_name": msg.creator.display_name,
+            "content": msg.content,
+            "created_at": msg.created_at.timestamp(),
+            "id": str(msg.id),
+        }
+        for msg in room.message_set.order_by("-created_at")[:10][::-1]
+    ]
+    return messages
+
+
 class RoomConsumer(AsyncJsonWebsocketConsumer):
     def __init__(self, *args, **kwargs):
         super().__init__(args, kwargs)
@@ -70,11 +84,18 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
                 self.channel_name, {"type": "members", "members": member_display_names}
             )
 
+    async def fetch_initial_messages(self, room):
+        messages = await database_sync_to_async(get_initial_messages)(room)
+        await self.channel_layer.send(
+            self.channel_name, {"type": "messages", "messages": messages}
+        )
+
     async def initialize_room(self):
         await self.channel_layer.group_add(self.room_id, self.channel_name)
         room = await database_sync_to_async(get_room)(self.room_id)
         await self.fetch_member_display_names(room)
         await self.fetch_display_name(room)
+        await self.fetch_initial_messages(room)
 
     def create_new_message(self, content):
         room = get_room(self.room_id)
@@ -113,5 +134,9 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         await self.send_json(event)
 
     async def new_message(self, event):
+        # Send message to WebSocket
+        await self.send_json(event)
+
+    async def messages(self, event):
         # Send message to WebSocket
         await self.send_json(event)
