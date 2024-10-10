@@ -1,9 +1,10 @@
+import asyncio
 import logging
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
-from blabhere.models import Room
+from blabhere.models import Room, Message
 
 logger = logging.getLogger(__name__)
 
@@ -75,15 +76,42 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         await self.fetch_member_display_names(room)
         await self.fetch_display_name(room)
 
+    def create_new_message(self, content):
+        room = get_room(self.room_id)
+        new_message = Message.objects.create(
+            creator=self.user, room=room, content=content
+        )
+        return {
+            "creator_display_name": new_message.creator.display_name,
+            "content": new_message.content,
+            "created_at": new_message.created_at.timestamp(),
+            "id": str(new_message.id),
+        }
+
+    async def send_message(self, input_payload):
+        message = input_payload.get("message", "")
+        if len(message.strip()) > 0:
+            new_message = await database_sync_to_async(self.create_new_message)(message)
+            await self.channel_layer.group_send(
+                self.room_id,
+                {"type": "new_message", "new_message": new_message},
+            )
+
     async def receive_json(self, content, **kwargs):
         if content.get("command") == "connect":
             self.room_id = content.get("room")
-            await self.initialize_room()
+            asyncio.create_task(self.initialize_room())
+        if content.get("command") == "send_message":
+            asyncio.create_task(self.send_message(content))
 
     async def display_name(self, event):
         # Send message to WebSocket
         await self.send_json(event)
 
     async def members(self, event):
+        # Send message to WebSocket
+        await self.send_json(event)
+
+    async def new_message(self, event):
         # Send message to WebSocket
         await self.send_json(event)
