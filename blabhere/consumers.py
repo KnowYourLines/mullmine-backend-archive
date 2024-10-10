@@ -4,83 +4,16 @@ import logging
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
-from blabhere.models import Room, Message
+from blabhere.helpers import (
+    add_user_to_room,
+    get_room,
+    get_prev_messages,
+    get_initial_messages,
+    create_new_message,
+    update_room_name,
+)
 
 logger = logging.getLogger(__name__)
-
-
-def get_room(room_id):
-    room, created = Room.objects.get_or_create(
-        id=room_id,
-        defaults={
-            "display_name": "A new room name",
-        },
-    )
-    return room
-
-
-def get_all_member_display_names(room_id):
-    members = []
-    room = Room.objects.filter(id=room_id)
-    if room.exists():
-        room = room.first()
-        members = room.members.all().values("display_name")
-    return [member["display_name"] for member in members]
-
-
-def add_user_to_room(user, room):
-    was_added = False
-    if user not in room.members.all():
-        room.members.add(user)
-        was_added = True
-    member_display_names = get_all_member_display_names(room.id)
-    return member_display_names, was_added
-
-
-def get_initial_messages(room):
-    messages = [
-        {
-            "creator_username": msg.creator.username,
-            "creator_display_name": msg.creator.display_name,
-            "content": msg.content,
-            "created_at": msg.created_at.timestamp(),
-            "id": str(msg.id),
-        }
-        for msg in room.message_set.order_by("-created_at")[:10][::-1]
-    ]
-    return messages
-
-
-def create_new_message(content, room, creator):
-
-    new_message = Message.objects.create(creator=creator, room=room, content=content)
-    return {
-        "creator_username": new_message.creator.username,
-        "creator_display_name": new_message.creator.display_name,
-        "content": new_message.content,
-        "created_at": new_message.created_at.timestamp(),
-        "id": str(new_message.id),
-    }
-
-
-def get_prev_messages(oldest_msg_id, room):
-    messages = []
-    oldest_msg = Message.objects.filter(id=oldest_msg_id, room=room)
-    if oldest_msg.exists():
-        oldest_msg = oldest_msg.first()
-        messages = [
-            {
-                "creator_username": msg.creator.username,
-                "creator_display_name": msg.creator.display_name,
-                "content": msg.content,
-                "created_at": msg.created_at.timestamp(),
-                "id": str(msg.id),
-            }
-            for msg in room.message_set.filter(
-                created_at__lt=oldest_msg.created_at
-            ).order_by("-created_at")[:10][::-1]
-        ]
-    return messages
 
 
 class RoomConsumer(AsyncJsonWebsocketConsumer):
@@ -150,6 +83,15 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
                 {"type": "new_message", "new_message": new_message},
             )
 
+    async def update_display_name(self, input_payload):
+        new_display_name = input_payload.get("new_display_name", "")
+        if len(new_display_name.strip()) > 0:
+            room = await database_sync_to_async(get_room)(self.room_id)
+            await database_sync_to_async(update_room_name)(new_display_name, room)
+            await self.channel_layer.group_send(
+                self.room_id, {"type": "display_name", "display_name": new_display_name}
+            )
+
     async def receive_json(self, content, **kwargs):
         if content.get("command") == "connect":
             self.room_id = content.get("room")
@@ -158,6 +100,8 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             asyncio.create_task(self.send_message(content))
         if content.get("command") == "fetch_prev_messages":
             asyncio.create_task(self.fetch_prev_messages(content))
+        if content.get("command") == "update_display_name":
+            asyncio.create_task(self.update_display_name(content))
 
     async def display_name(self, event):
         # Send message to WebSocket
