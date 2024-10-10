@@ -40,6 +40,7 @@ def add_user_to_room(user, room):
 def get_initial_messages(room):
     messages = [
         {
+            "creator_username": msg.creator.username,
             "creator_display_name": msg.creator.display_name,
             "content": msg.content,
             "created_at": msg.created_at.timestamp(),
@@ -54,6 +55,7 @@ def create_new_message(content, room, creator):
 
     new_message = Message.objects.create(creator=creator, room=room, content=content)
     return {
+        "creator_username": new_message.creator.username,
         "creator_display_name": new_message.creator.display_name,
         "content": new_message.content,
         "created_at": new_message.created_at.timestamp(),
@@ -68,6 +70,7 @@ def get_prev_messages(oldest_msg_id, room):
         oldest_msg = oldest_msg.first()
         messages = [
             {
+                "creator_username": msg.creator.username,
                 "creator_display_name": msg.creator.display_name,
                 "content": msg.content,
                 "created_at": msg.created_at.timestamp(),
