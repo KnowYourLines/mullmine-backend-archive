@@ -1,5 +1,4 @@
 import asyncio
-import datetime
 import logging
 
 from channels.db import database_sync_to_async
@@ -51,6 +50,36 @@ def get_initial_messages(room):
     return messages
 
 
+def create_new_message(content, room, creator):
+
+    new_message = Message.objects.create(creator=creator, room=room, content=content)
+    return {
+        "creator_display_name": new_message.creator.display_name,
+        "content": new_message.content,
+        "created_at": new_message.created_at.timestamp(),
+        "id": str(new_message.id),
+    }
+
+
+def get_prev_messages(oldest_msg_id, room):
+    messages = []
+    oldest_msg = Message.objects.filter(id=oldest_msg_id, room=room)
+    if oldest_msg.exists():
+        oldest_msg = oldest_msg.first()
+        messages = [
+            {
+                "creator_display_name": msg.creator.display_name,
+                "content": msg.content,
+                "created_at": msg.created_at.timestamp(),
+                "id": str(msg.id),
+            }
+            for msg in room.message_set.filter(
+                created_at__lt=oldest_msg.created_at
+            ).order_by("-created_at")[:10][::-1]
+        ]
+    return messages
+
+
 class RoomConsumer(AsyncJsonWebsocketConsumer):
     def __init__(self, *args, **kwargs):
         super().__init__(args, kwargs)
@@ -90,6 +119,14 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             self.channel_name, {"type": "messages", "messages": messages}
         )
 
+    async def fetch_prev_messages(self, input_payload):
+        oldest_msg_id = input_payload.get("oldest_message_id", "")
+        room = await database_sync_to_async(get_room)(self.room_id)
+        messages = await database_sync_to_async(get_prev_messages)(oldest_msg_id, room)
+        await self.channel_layer.send(
+            self.channel_name, {"type": "messages", "messages": messages}
+        )
+
     async def initialize_room(self):
         await self.channel_layer.group_add(self.room_id, self.channel_name)
         room = await database_sync_to_async(get_room)(self.room_id)
@@ -97,22 +134,14 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         await self.fetch_display_name(room)
         await self.fetch_initial_messages(room)
 
-    def create_new_message(self, content):
-        room = get_room(self.room_id)
-        new_message = Message.objects.create(
-            creator=self.user, room=room, content=content
-        )
-        return {
-            "creator_display_name": new_message.creator.display_name,
-            "content": new_message.content,
-            "created_at": new_message.created_at.timestamp(),
-            "id": str(new_message.id),
-        }
-
     async def send_message(self, input_payload):
         message = input_payload.get("message", "")
+        room = await database_sync_to_async(get_room)(self.room_id)
+        creator = self.user
         if len(message.strip()) > 0:
-            new_message = await database_sync_to_async(self.create_new_message)(message)
+            new_message = await database_sync_to_async(create_new_message)(
+                message, room, creator
+            )
             await self.channel_layer.group_send(
                 self.room_id,
                 {"type": "new_message", "new_message": new_message},
@@ -124,6 +153,8 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             asyncio.create_task(self.initialize_room())
         if content.get("command") == "send_message":
             asyncio.create_task(self.send_message(content))
+        if content.get("command") == "fetch_prev_messages":
+            asyncio.create_task(self.fetch_prev_messages(content))
 
     async def display_name(self, event):
         # Send message to WebSocket
