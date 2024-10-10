@@ -19,7 +19,7 @@ services:
     runtime: docker
     repo: https://github.com/KnowYourLines/blabhere-backend.git
     region: ohio
-    plan: free
+    plan: starter
     branch: main
     dockerCommand: ./render.sh
     envVars:
