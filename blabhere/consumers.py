@@ -12,6 +12,7 @@ from blabhere.helpers import (
     create_new_message,
     update_room_name,
     change_user_display_name,
+    get_all_member_display_names,
 )
 
 logger = logging.getLogger(__name__)
@@ -52,9 +53,13 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
             ) = await database_sync_to_async(
                 change_user_display_name
             )(self.user, new_display_name)
-            # for room in rooms_to_refresh:
-            #     await self.channel_layer.group_send(room, {"type": "refresh_members"})
-            #     await self.channel_layer.group_send(room, {"type": "refresh_messages"})
+            for room in rooms_to_refresh:
+                members = await database_sync_to_async(get_all_member_display_names)(
+                    room
+                )
+                await self.channel_layer.group_send(
+                    room, {"type": "members", "members": members}
+                )
             await self.channel_layer.group_send(
                 self.username,
                 {
