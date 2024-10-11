@@ -163,7 +163,7 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             await database_sync_to_async(update_room_name)(new_display_name, room)
             await self.channel_layer.group_send(
                 self.room_id,
-                {"type": "display_name", "display_name": self.user.display_name},
+                {"type": "display_name", "display_name": room.display_name},
             )
 
     async def receive_json(self, content, **kwargs):
