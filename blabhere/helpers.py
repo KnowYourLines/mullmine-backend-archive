@@ -1,6 +1,30 @@
 from blabhere.models import Room, Message, User
 
 
+def get_num_room_members(room):
+    return room.members.all().count()
+
+
+def is_room_creator(room, user):
+    return room.creator.username == user.username
+
+
+def update_member_limit(new_limit, room, user):
+    if room.creator.username == user.username:
+        room.max_num_members = new_limit
+        room.save()
+    return room
+
+
+def check_room_full(room_id):
+    room = Room.objects.filter(id=room_id)
+    if room.exists():
+        room = room.first()
+        return (
+            room.max_num_members and room.max_num_members < room.members.all().count()
+        )
+
+
 def get_room(room_id):
     room = Room.objects.get(id=room_id)
     return room
@@ -57,18 +81,21 @@ def get_initial_messages(room):
 
 
 def get_refreshed_messages(room, oldest_message_timestamp):
-    messages = [
-        {
-            "creator_username": msg.creator.username,
-            "creator_display_name": msg.creator.display_name,
-            "content": msg.content,
-            "created_at": msg.created_at.timestamp(),
-            "id": str(msg.id),
-        }
-        for msg in room.message_set.filter(
-            created_at__gte=oldest_message_timestamp
-        ).order_by("-created_at")[::-1]
-    ]
+    if oldest_message_timestamp:
+        messages = [
+            {
+                "creator_username": msg.creator.username,
+                "creator_display_name": msg.creator.display_name,
+                "content": msg.content,
+                "created_at": msg.created_at.timestamp(),
+                "id": str(msg.id),
+            }
+            for msg in room.message_set.filter(
+                created_at__gte=oldest_message_timestamp
+            ).order_by("-created_at")[::-1]
+        ]
+    else:
+        messages = []
     return messages
 
 

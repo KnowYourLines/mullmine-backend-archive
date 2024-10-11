@@ -16,6 +16,7 @@ class Room(models.Model):
     creator = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, related_name="rooms_created"
     )
+    max_num_members = models.PositiveBigIntegerField(null=True)
 
 
 class Message(models.Model):

@@ -17,6 +17,10 @@ from blabhere.helpers import (
     get_user,
     initialize_room,
     get_refreshed_messages,
+    update_member_limit,
+    check_room_full,
+    is_room_creator,
+    get_num_room_members,
 )
 
 logger = logging.getLogger(__name__)
@@ -128,6 +132,19 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             self.channel_name, {"type": "messages", "messages": messages}
         )
 
+    async def fetch_is_creator(self, room):
+        is_creator = await database_sync_to_async(is_room_creator)(room, self.user)
+        await self.channel_layer.send(
+            self.channel_name,
+            {"type": "is_room_creator", "is_room_creator": is_creator},
+        )
+
+    async def fetch_member_limit(self, room):
+        await self.channel_layer.send(
+            self.channel_name,
+            {"type": "member_limit", "member_limit": room.max_num_members},
+        )
+
     async def fetch_prev_messages(self, input_payload):
         oldest_msg_id = input_payload.get("oldest_message_id", "")
         room = await database_sync_to_async(get_room)(self.room_id)
@@ -137,11 +154,21 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         )
 
     async def initialize_room(self):
-        await self.channel_layer.group_add(self.room_id, self.channel_name)
-        room = await database_sync_to_async(initialize_room)(self.room_id, self.user)
-        await self.fetch_member_display_names(room)
-        await self.fetch_display_name(room)
-        await self.fetch_initial_messages(room)
+        is_room_full = await database_sync_to_async(check_room_full)(self.room_id)
+        if not is_room_full:
+            await self.channel_layer.group_add(self.room_id, self.channel_name)
+            room = await database_sync_to_async(initialize_room)(
+                self.room_id, self.user
+            )
+            await self.fetch_member_display_names(room)
+            await self.fetch_display_name(room)
+            await self.fetch_initial_messages(room)
+            await self.fetch_member_limit(room)
+            await self.fetch_is_creator(room)
+        else:
+            await self.channel_layer.send(
+                self.channel_name, {"type": "is_room_full", "is_room_full": True}
+            )
 
     async def send_message(self, input_payload):
         message = input_payload.get("message", "")
@@ -166,6 +193,19 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
                 {"type": "display_name", "display_name": room.display_name},
             )
 
+    async def update_member_limit(self, input_payload):
+        room = await database_sync_to_async(get_room)(self.room_id)
+        num_members = await database_sync_to_async(get_num_room_members)(room)
+        new_limit = int(input_payload.get("max_num_members", num_members))
+        if new_limit and new_limit >= num_members:
+            room = await database_sync_to_async(update_member_limit)(
+                new_limit, room, self.user
+            )
+            await self.channel_layer.group_send(
+                self.room_id,
+                {"type": "member_limit", "member_limit": room.max_num_members},
+            )
+
     async def receive_json(self, content, **kwargs):
         if content.get("command") == "connect":
             self.room_id = content.get("room")
@@ -176,6 +216,20 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             asyncio.create_task(self.fetch_prev_messages(content))
         if content.get("command") == "update_display_name":
             asyncio.create_task(self.update_display_name(content))
+        if content.get("command") == "update_member_limit":
+            asyncio.create_task(self.update_member_limit(content))
+
+    async def member_limit(self, event):
+        # Send message to WebSocket
+        await self.send_json(event)
+
+    async def is_room_full(self, event):
+        # Send message to WebSocket
+        await self.send_json(event)
+
+    async def is_room_creator(self, event):
+        # Send message to WebSocket
+        await self.send_json(event)
 
     async def display_name(self, event):
         # Send message to WebSocket
