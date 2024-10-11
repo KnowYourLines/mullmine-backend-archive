@@ -2,11 +2,14 @@ from blabhere.models import Room, Message, User
 
 
 def get_room(room_id):
+    room = Room.objects.get(id=room_id)
+    return room
+
+
+def initialize_room(room_id, user):
     room, created = Room.objects.get_or_create(
         id=room_id,
-        defaults={
-            "display_name": "A new room name",
-        },
+        defaults={"display_name": "A new room name", "creator": user},
     )
     return room
 

@@ -14,6 +14,7 @@ from blabhere.helpers import (
     change_user_display_name,
     get_all_member_display_names,
     get_user,
+    initialize_room,
 )
 
 logger = logging.getLogger(__name__)
@@ -137,7 +138,7 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
 
     async def initialize_room(self):
         await self.channel_layer.group_add(self.room_id, self.channel_name)
-        room = await database_sync_to_async(get_room)(self.room_id)
+        room = await database_sync_to_async(initialize_room)(self.room_id, self.user)
         await self.fetch_member_display_names(room)
         await self.fetch_display_name(room)
         await self.fetch_initial_messages(room)

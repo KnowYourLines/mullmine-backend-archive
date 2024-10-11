@@ -13,6 +13,9 @@ class Room(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     members = models.ManyToManyField(User)
     display_name = models.CharField(max_length=150, blank=True)
+    creator = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, related_name="rooms_created"
+    )
 
 
 class Message(models.Model):
