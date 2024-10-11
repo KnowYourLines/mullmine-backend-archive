@@ -78,3 +78,10 @@ def get_prev_messages(oldest_msg_id, room):
             ).order_by("-created_at")[:10][::-1]
         ]
     return messages
+
+
+def change_user_display_name(user, new_name):
+    user.display_name = new_name
+    user.save()
+    rooms_to_refresh = [str(room["id"]) for room in user.room_set.all().values()]
+    return new_name, rooms_to_refresh

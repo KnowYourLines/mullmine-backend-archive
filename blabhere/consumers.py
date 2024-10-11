@@ -11,6 +11,7 @@ from blabhere.helpers import (
     get_initial_messages,
     create_new_message,
     update_room_name,
+    change_user_display_name,
 )
 
 logger = logging.getLogger(__name__)
@@ -41,6 +42,31 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.username, self.channel_name)
+
+    async def update_display_name(self, input_payload):
+        new_display_name = input_payload.get("new_display_name", "")
+        if len(new_display_name.strip()) > 0:
+            (
+                display_name,
+                rooms_to_refresh,
+            ) = await database_sync_to_async(
+                change_user_display_name
+            )(self.user, new_display_name)
+            # for room in rooms_to_refresh:
+            #     await self.channel_layer.group_send(room, {"type": "refresh_members"})
+            #     await self.channel_layer.group_send(room, {"type": "refresh_messages"})
+            await self.channel_layer.group_send(
+                self.username,
+                {
+                    "type": "display_name",
+                    "display_name": display_name,
+                },
+            )
+
+    async def receive_json(self, content, **kwargs):
+        if self.username == self.user.username:
+            if content.get("command") == "update_display_name":
+                asyncio.create_task(self.update_display_name(content))
 
     async def display_name(self, event):
         # Send message to WebSocket

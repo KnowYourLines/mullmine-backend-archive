@@ -46,7 +46,7 @@ def get_user(token):
     except Exception:
         raise FirebaseAuthError("Missing uid.")
 
-    user, created = User.objects.update_or_create(
+    user, created = User.objects.get_or_create(
         username=uid,
         defaults={
             "display_name": uid,
