@@ -1,4 +1,4 @@
-from blabhere.models import Room, Message
+from blabhere.models import Room, Message, User
 
 
 def get_room(room_id):
@@ -9,6 +9,11 @@ def get_room(room_id):
         },
     )
     return room
+
+
+def get_user(username):
+    user = User.objects.get(username=username)
+    return user
 
 
 def get_all_member_display_names(room_id):
