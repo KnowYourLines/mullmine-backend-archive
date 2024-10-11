@@ -56,6 +56,22 @@ def get_initial_messages(room):
     return messages
 
 
+def get_refreshed_messages(room, oldest_message_timestamp):
+    messages = [
+        {
+            "creator_username": msg.creator.username,
+            "creator_display_name": msg.creator.display_name,
+            "content": msg.content,
+            "created_at": msg.created_at.timestamp(),
+            "id": str(msg.id),
+        }
+        for msg in room.message_set.filter(
+            created_at__gte=oldest_message_timestamp
+        ).order_by("-created_at")[::-1]
+    ]
+    return messages
+
+
 def create_new_message(content, room, creator):
 
     new_message = Message.objects.create(creator=creator, room=room, content=content)

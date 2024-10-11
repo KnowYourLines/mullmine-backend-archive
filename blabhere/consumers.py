@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import logging
 
 from channels.db import database_sync_to_async
@@ -15,6 +16,7 @@ from blabhere.helpers import (
     get_all_member_display_names,
     get_user,
     initialize_room,
+    get_refreshed_messages,
 )
 
 logger = logging.getLogger(__name__)
@@ -62,13 +64,10 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
                 await self.channel_layer.group_send(
                     room_id, {"type": "members", "members": members}
                 )
-                room = await database_sync_to_async(get_room)(room_id)
-                messages = await database_sync_to_async(get_initial_messages)(room)
                 await self.channel_layer.group_send(
                     room_id,
                     {
                         "type": "refreshed_messages",
-                        "refreshed_messages": messages,
                     },
                 )
             await self.channel_layer.group_send(
@@ -94,6 +93,7 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         super().__init__(args, kwargs)
         self.room_id = None
         self.user = None
+        self.oldest_message_timestamp = None
 
     async def connect(self):
         await self.accept()
@@ -186,13 +186,28 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         await self.send_json(event)
 
     async def new_message(self, event):
-        # Send message to WebSocket
+        if not self.oldest_message_timestamp:
+            self.oldest_message_timestamp = datetime.datetime.fromtimestamp(
+                event["new_message"]["created_at"]
+            )
         await self.send_json(event)
 
     async def messages(self, event):
-        # Send message to WebSocket
+        messages = event["messages"]
+        if messages:
+            oldest_message_timestamp = datetime.datetime.fromtimestamp(
+                messages[0]["created_at"]
+            )
+            if not self.oldest_message_timestamp:
+                self.oldest_message_timestamp = oldest_message_timestamp
+            elif oldest_message_timestamp < self.oldest_message_timestamp:
+                self.oldest_message_timestamp = oldest_message_timestamp
         await self.send_json(event)
 
     async def refreshed_messages(self, event):
-        # Send message to WebSocket
+        room = await database_sync_to_async(get_room)(self.room_id)
+        messages = await database_sync_to_async(get_refreshed_messages)(
+            room, self.oldest_message_timestamp
+        )
+        event["refreshed_messages"] = messages
         await self.send_json(event)
