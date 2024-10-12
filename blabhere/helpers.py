@@ -16,12 +16,15 @@ def update_member_limit(new_limit, room, user):
     return room
 
 
-def check_room_full(room_id):
+def check_room_full(room_id, user):
     room = Room.objects.filter(id=room_id)
     if room.exists():
         room = room.first()
+        is_member = room.members.filter(username=user.username).exists()
         return (
-            room.max_num_members and room.max_num_members < room.members.all().count()
+            room.max_num_members
+            and not (room.members.all().count() < room.max_num_members)
+            and not is_member
         )
 
 

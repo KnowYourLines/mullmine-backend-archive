@@ -154,7 +154,9 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         )
 
     async def initialize_room(self):
-        is_room_full = await database_sync_to_async(check_room_full)(self.room_id)
+        is_room_full = await database_sync_to_async(check_room_full)(
+            self.room_id, self.user
+        )
         if not is_room_full:
             await self.channel_layer.group_add(self.room_id, self.channel_name)
             room = await database_sync_to_async(initialize_room)(
@@ -196,7 +198,7 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
     async def update_member_limit(self, input_payload):
         room = await database_sync_to_async(get_room)(self.room_id)
         num_members = await database_sync_to_async(get_num_room_members)(room)
-        new_limit = int(input_payload.get("max_num_members", num_members))
+        new_limit = int(input_payload.get("max_num_members", None))
         if new_limit and new_limit >= num_members:
             room = await database_sync_to_async(update_member_limit)(
                 new_limit, room, self.user
