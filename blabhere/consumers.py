@@ -23,6 +23,7 @@ from blabhere.helpers import (
     get_num_room_members,
     get_user_conversations,
     get_all_member_usernames,
+    read_unread_conversation,
 )
 
 logger = logging.getLogger(__name__)
@@ -181,6 +182,15 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             self.channel_name, {"type": "messages", "messages": messages}
         )
 
+    async def read_conversation(self):
+        await database_sync_to_async(read_unread_conversation)(self.room_id, self.user)
+        await self.channel_layer.group_send(
+            self.user.username,
+            {
+                "type": "refresh_conversations",
+            },
+        )
+
     async def initialize_room(self):
         is_room_full = await database_sync_to_async(check_room_full)(
             self.room_id, self.user
@@ -291,6 +301,7 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
                 event["new_message"]["created_at"]
             )
         await self.send_json(event)
+        await self.read_conversation()
 
     async def messages(self, event):
         messages = event["messages"]

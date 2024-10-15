@@ -3,6 +3,14 @@ from django.db.models import F
 from blabhere.models import Room, Message, User, Conversation
 
 
+def read_unread_conversation(room_id, user):
+    room = Room.objects.get(id=room_id)
+    conversation = Conversation.objects.get(participant=user, room=room)
+    if not conversation.read:
+        conversation.read = True
+        conversation.save()
+
+
 def get_user_conversations(username):
     user = User.objects.get(username=username)
     conversations = list(
