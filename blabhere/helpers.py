@@ -3,6 +3,15 @@ from django.db.models import F
 from blabhere.models import Room, Message, User, Conversation
 
 
+def leave_room(user, room_id):
+    room_to_leave = Room.objects.get(id=room_id)
+    room_to_leave.members.remove(user)
+    user.room_set.remove(room_to_leave)
+    user.conversation_set.filter(room=room_to_leave).delete()
+    if not room_to_leave.members.all():
+        room_to_leave.delete()
+
+
 def read_unread_conversation(room_id, user):
     room = Room.objects.get(id=room_id)
     conversation = Conversation.objects.get(participant=user, room=room)
@@ -41,11 +50,11 @@ def get_num_room_members(room):
 
 
 def is_room_creator(room, user):
-    return room.creator.username == user.username
+    return room.creator and room.creator.username == user.username
 
 
 def update_member_limit(new_limit, room, user):
-    if room.creator.username == user.username:
+    if room.creator and room.creator.username == user.username:
         room.max_num_members = new_limit
         room.save()
     return room
