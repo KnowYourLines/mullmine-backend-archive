@@ -205,6 +205,7 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             await self.fetch_initial_messages(room)
             await self.fetch_member_limit(room)
             await self.fetch_is_creator(room)
+            await self.read_conversation()
         else:
             await self.channel_layer.send(
                 self.channel_name, {"type": "is_room_full", "is_room_full": True}

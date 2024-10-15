@@ -71,7 +71,7 @@ def get_room(room_id):
 def initialize_room(room_id, user):
     room, created = Room.objects.get_or_create(
         id=room_id,
-        defaults={"display_name": room_id, "creator": user},
+        defaults={"display_name": "A lazy room", "creator": user},
     )
     return room
 
