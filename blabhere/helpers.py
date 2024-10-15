@@ -187,4 +187,10 @@ def change_user_display_name(user, new_name):
     user.display_name = new_name
     user.save()
     rooms_to_refresh = [str(room["id"]) for room in user.room_set.all().values()]
-    return new_name, rooms_to_refresh
+    users_to_refresh = [
+        str(conversation["participant__username"])
+        for conversation in Conversation.objects.filter(
+            latest_message__creator=user
+        ).values("participant__username")
+    ]
+    return new_name, rooms_to_refresh, users_to_refresh

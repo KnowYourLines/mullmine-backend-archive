@@ -67,12 +67,16 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
     async def update_display_name(self, input_payload):
         new_display_name = input_payload.get("new_display_name", "")
         if len(new_display_name.strip()) > 0:
-            (
-                display_name,
-                rooms_to_refresh,
-            ) = await database_sync_to_async(
-                change_user_display_name
-            )(self.user, new_display_name)
+            (display_name, rooms_to_refresh, users_to_refresh) = (
+                await database_sync_to_async(change_user_display_name)(
+                    self.user, new_display_name
+                )
+            )
+            for username in users_to_refresh:
+                await self.channel_layer.group_send(
+                    username,
+                    {"type": "refresh_conversations"},
+                )
             for room_id in rooms_to_refresh:
                 members = await database_sync_to_async(get_all_member_display_names)(
                     room_id
@@ -226,6 +230,14 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
                 self.room_id,
                 {"type": "display_name", "display_name": room.display_name},
             )
+            usernames = await database_sync_to_async(get_all_member_usernames)(
+                self.room_id
+            )
+            for username in usernames:
+                await self.channel_layer.group_send(
+                    username,
+                    {"type": "refresh_conversations"},
+                )
 
     async def update_member_limit(self, input_payload):
         room = await database_sync_to_async(get_room)(self.room_id)
