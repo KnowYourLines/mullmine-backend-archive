@@ -264,6 +264,10 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
 
     async def receive_json(self, content, **kwargs):
         if content.get("command") == "connect":
+            if self.room_id:
+                await self.channel_layer.group_discard(
+                    str(self.room_id), self.channel_name
+                )
             self.room_id = content.get("room")
             asyncio.create_task(self.initialize_room())
         if content.get("command") == "send_message":
