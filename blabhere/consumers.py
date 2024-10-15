@@ -21,6 +21,8 @@ from blabhere.helpers import (
     check_room_full,
     is_room_creator,
     get_num_room_members,
+    get_user_conversations,
+    get_all_member_usernames,
 )
 
 logger = logging.getLogger(__name__)
@@ -39,12 +41,22 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
             {"type": "display_name", "display_name": display_name},
         )
 
+    async def fetch_conversations(self):
+        conversations = await database_sync_to_async(get_user_conversations)(
+            self.user.username
+        )
+        await self.channel_layer.send(
+            self.channel_name,
+            {"type": "conversations", "conversations": conversations},
+        )
+
     async def connect(self):
         self.username = str(self.scope["url_route"]["kwargs"]["user_id"])
         self.user = self.scope["user"]
         if self.username == self.user.username:
             await self.channel_layer.group_add(self.username, self.channel_name)
             await self.accept()
+            await self.fetch_conversations()
             await self.fetch_display_name()
         else:
             await self.close()
@@ -91,6 +103,14 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
         # Send message to WebSocket
         await self.send_json(event)
 
+    async def conversations(self, event):
+        # Send message to WebSocket
+        await self.send_json(event)
+
+    async def refresh_conversations(self, event):
+        # Send message to WebSocket
+        await self.fetch_conversations()
+
 
 class RoomConsumer(AsyncJsonWebsocketConsumer):
     def __init__(self, *args, **kwargs):
@@ -120,6 +140,10 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         if was_added:
             await self.channel_layer.group_send(
                 self.room_id, {"type": "members", "members": member_display_names}
+            )
+            await self.channel_layer.group_send(
+                self.user.username,
+                {"type": "refresh_conversations"},
             )
         else:
             await self.channel_layer.send(
@@ -180,6 +204,14 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             new_message = await database_sync_to_async(create_new_message)(
                 message, room, creator
             )
+            usernames = await database_sync_to_async(get_all_member_usernames)(
+                self.room_id
+            )
+            for username in usernames:
+                await self.channel_layer.group_send(
+                    username,
+                    {"type": "refresh_conversations"},
+                )
             await self.channel_layer.group_send(
                 self.room_id,
                 {"type": "new_message", "new_message": new_message},

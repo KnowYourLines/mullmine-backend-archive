@@ -1,4 +1,31 @@
-from blabhere.models import Room, Message, User
+from django.db.models import F
+
+from blabhere.models import Room, Message, User, Conversation
+
+
+def get_user_conversations(username):
+    user = User.objects.get(username=username)
+    conversations = list(
+        user.conversation_set.values(
+            "room__id",
+            "room__display_name",
+            "read",
+            "latest_message__creator__display_name",
+            "latest_message__content",
+            "latest_message__created_at",
+            "created_at",
+        ).order_by(
+            "read", F("latest_message__created_at").desc(nulls_last=True), "-created_at"
+        )
+    )
+    for conversation in conversations:
+        conversation["room__id"] = str(conversation["room__id"])
+        conversation["created_at"] = conversation["created_at"].timestamp()
+        if conversation["latest_message__created_at"]:
+            conversation["latest_message__created_at"] = conversation[
+                "latest_message__created_at"
+            ].timestamp()
+    return conversations
 
 
 def get_num_room_members(room):
@@ -55,10 +82,23 @@ def get_all_member_display_names(room_id):
     return [member["display_name"] for member in members]
 
 
+def get_all_member_usernames(room_id):
+    members = []
+    room = Room.objects.filter(id=room_id)
+    if room.exists():
+        room = room.first()
+        members = room.members.all().values("username")
+    return [member["username"] for member in members]
+
+
 def add_user_to_room(user, room):
     was_added = False
+    latest_message = room.message_set.order_by("-created_at").first()
     if user not in room.members.all():
         room.members.add(user)
+        Conversation.objects.create(
+            participant=user, room=room, latest_message=latest_message, read=True
+        )
         was_added = True
     member_display_names = get_all_member_display_names(room.id)
     return member_display_names, was_added
@@ -105,6 +145,7 @@ def get_refreshed_messages(room, oldest_message_timestamp):
 def create_new_message(content, room, creator):
 
     new_message = Message.objects.create(creator=creator, room=room, content=content)
+    update_conversations_for_new_message(room, new_message)
     return {
         "creator_username": new_message.creator.username,
         "creator_display_name": new_message.creator.display_name,
@@ -112,6 +153,14 @@ def create_new_message(content, room, creator):
         "created_at": new_message.created_at.timestamp(),
         "id": str(new_message.id),
     }
+
+
+def update_conversations_for_new_message(room, message):
+    for user in room.members.all():
+        conversation = Conversation.objects.get(participant=user, room=room)
+        conversation.latest_message = message
+        conversation.read = user == message.creator
+        conversation.save()
 
 
 def get_prev_messages(oldest_msg_id, room):
