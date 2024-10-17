@@ -6,13 +6,13 @@ from django.db import models
 
 class User(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    display_name = models.CharField(max_length=150, blank=True)
+    display_name = models.CharField(max_length=150, unique=True)
 
 
 class Room(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     members = models.ManyToManyField(User)
-    display_name = models.CharField(max_length=150, blank=True)
+    display_name = models.CharField(max_length=150, unique=True)
     creator = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, related_name="rooms_created"
     )

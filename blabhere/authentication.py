@@ -49,7 +49,7 @@ def get_user(token):
     user, created = User.objects.get_or_create(
         username=uid,
         defaults={
-            "display_name": "A lazy human",
+            "display_name": uid,
         },
     )
     return user

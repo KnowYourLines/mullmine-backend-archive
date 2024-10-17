@@ -1,3 +1,4 @@
+from django.db import IntegrityError
 from django.db.models import F
 
 from blabhere.models import Room, Message, User, Conversation
@@ -80,7 +81,7 @@ def get_room(room_id):
 def initialize_room(room_id, user):
     room, created = Room.objects.get_or_create(
         id=room_id,
-        defaults={"display_name": "A lazy room", "creator": user},
+        defaults={"display_name": room_id, "creator": user},
     )
     return room
 
@@ -122,8 +123,12 @@ def add_user_to_room(user, room):
 
 
 def update_room_name(name, room):
-    room.display_name = name
-    room.save()
+    try:
+        room.display_name = name
+        room.save()
+        return True
+    except IntegrityError:
+        return False
 
 
 def get_initial_messages(room):
@@ -201,8 +206,6 @@ def get_prev_messages(oldest_msg_id, room):
 
 
 def change_user_display_name(user, new_name):
-    user.display_name = new_name
-    user.save()
     rooms_to_refresh = [str(room["id"]) for room in user.room_set.all().values()]
     users_to_refresh = [
         str(conversation["participant__username"])
@@ -210,4 +213,9 @@ def change_user_display_name(user, new_name):
             latest_message__creator=user
         ).values("participant__username")
     ]
-    return new_name, rooms_to_refresh, users_to_refresh
+    try:
+        user.display_name = new_name
+        user.save()
+        return True, new_name, rooms_to_refresh, users_to_refresh
+    except IntegrityError:
+        return False, new_name, rooms_to_refresh, users_to_refresh
