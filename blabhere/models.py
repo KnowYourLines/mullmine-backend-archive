@@ -17,6 +17,7 @@ class Room(models.Model):
         User, on_delete=models.SET_NULL, null=True, related_name="rooms_created"
     )
     max_num_members = models.PositiveBigIntegerField(null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
 
 class Message(models.Model):
