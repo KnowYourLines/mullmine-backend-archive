@@ -1,6 +1,7 @@
 from django.core.paginator import Paginator, EmptyPage
 from django.db import IntegrityError
 from django.db.models import F, Count, OuterRef, Case, When, BooleanField
+from django.db.models.lookups import GreaterThanOrEqual
 
 from blabhere.models import Room, Message, User, Conversation
 
@@ -8,7 +9,7 @@ from blabhere.models import Room, Message, User, Conversation
 def room_search(page, user):
     try:
         room_full = Case(
-            When(num_members=F("max_num_members"), then=True),
+            When(GreaterThanOrEqual(F("num_members"), F("max_num_members")), then=True),
             default=False,
             output_field=BooleanField(),
         )
