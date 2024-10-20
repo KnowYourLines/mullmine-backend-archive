@@ -25,6 +25,7 @@ from blabhere.helpers import (
     get_all_member_usernames,
     read_unread_conversation,
     leave_room,
+    room_search,
 )
 
 logger = logging.getLogger(__name__)
@@ -156,13 +157,27 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         self.room_id = None
         self.user = None
         self.oldest_message_timestamp = None
+        self.room_search_page = 1
 
     async def connect(self):
         await self.accept()
         self.user = self.scope["user"]
+        await self.initial_room_search()
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(str(self.room_id), self.channel_name)
+
+    async def initial_room_search(self):
+        results = await database_sync_to_async(room_search)(
+            self.room_search_page, self.user
+        )
+        await self.channel_layer.send(
+            self.channel_name,
+            {
+                "type": "room_search_results",
+                "room_search_results": results,
+            },
+        )
 
     async def fetch_display_name(self, room):
         display_name = room.display_name
@@ -323,6 +338,10 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             asyncio.create_task(self.update_display_name(content))
         if content.get("command") == "update_member_limit":
             asyncio.create_task(self.update_member_limit(content))
+
+    async def room_search_results(self, event):
+        # Send message to WebSocket
+        await self.send_json(event)
 
     async def display_name_taken(self, event):
         # Send message to WebSocket

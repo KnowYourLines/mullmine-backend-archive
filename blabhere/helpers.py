@@ -1,7 +1,54 @@
+from django.core.paginator import Paginator, EmptyPage
 from django.db import IntegrityError
-from django.db.models import F
+from django.db.models import F, Count, OuterRef, Case, When, BooleanField
 
 from blabhere.models import Room, Message, User, Conversation
+
+
+def room_search(page, user):
+    try:
+        room_full = Case(
+            When(num_members=F("max_num_members"), then=True),
+            default=False,
+            output_field=BooleanField(),
+        )
+
+        latest_message_timestamp = (
+            Message.objects.filter(room__id=OuterRef("id"))
+            .order_by("-created_at")
+            .values("created_at")[:1]
+        )
+        rooms = Paginator(
+            Room.objects.all()
+            .annotate(num_members=Count("members"))
+            .annotate(room_full=room_full)
+            .annotate(latest_message_timestamp=latest_message_timestamp)
+            .exclude(id__in=user.room_set.values("id"))
+            .exclude(room_full=True)
+            .order_by(
+                "-num_members", F("latest_message_timestamp").desc(nulls_last=True)
+            )
+            .values(
+                "display_name",
+                "created_at",
+                "id",
+                "num_members",
+                "max_num_members",
+                "latest_message_timestamp",
+            ),
+            10,
+        )
+        rooms = rooms.page(page)
+        for room in rooms:
+            if room["latest_message_timestamp"]:
+                room["latest_message_timestamp"] = room[
+                    "latest_message_timestamp"
+                ].timestamp()
+            room["id"] = str(room["id"])
+            room["created_at"] = room["created_at"].timestamp()
+        return rooms.object_list
+    except EmptyPage:
+        return []
 
 
 def leave_room(user, room_id):
