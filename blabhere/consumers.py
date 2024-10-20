@@ -168,7 +168,7 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         await self.channel_layer.group_discard(str(self.room_id), self.channel_name)
 
     async def initial_room_search(self):
-        results = await database_sync_to_async(room_search)(
+        results, page = await database_sync_to_async(room_search)(
             self.room_search_page, self.user
         )
         await self.channel_layer.send(
@@ -178,6 +178,20 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
                 "room_search_results": results,
             },
         )
+
+    async def fetch_next_room_search_results(self):
+        results, page = await database_sync_to_async(room_search)(
+            self.room_search_page, self.user
+        )
+        if results:
+            self.room_search_page = page + 1
+            await self.channel_layer.send(
+                self.channel_name,
+                {
+                    "type": "room_search_results",
+                    "room_search_results": results,
+                },
+            )
 
     async def fetch_display_name(self, room):
         display_name = room.display_name
@@ -338,6 +352,8 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             asyncio.create_task(self.update_display_name(content))
         if content.get("command") == "update_member_limit":
             asyncio.create_task(self.update_member_limit(content))
+        if content.get("command") == "fetch_next_room_search_results":
+            asyncio.create_task(self.fetch_next_room_search_results())
 
     async def room_search_results(self, event):
         # Send message to WebSocket
