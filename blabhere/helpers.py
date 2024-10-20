@@ -27,7 +27,9 @@ def room_search(page, user):
             .exclude(id__in=user.room_set.values("id"))
             .exclude(room_full=True)
             .order_by(
-                "-num_members", F("latest_message_timestamp").desc(nulls_last=True)
+                "-num_members",
+                F("latest_message_timestamp").desc(nulls_last=True),
+                "-created_at",
             )
             .values(
                 "display_name",
