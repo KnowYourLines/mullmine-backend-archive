@@ -178,19 +178,19 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         if isinstance(name_query, str) and name_query != self.room_name_query:
             self.room_name_query = name_query
             self.room_search_page = 1
-        results, page = await database_sync_to_async(room_search)(
+        results = await database_sync_to_async(room_search)(
             self.room_search_page, self.user, self.room_size_query, self.room_name_query
         )
         if results:
-            self.room_search_page = page + 1
             await self.channel_layer.send(
                 self.channel_name,
                 {
                     "type": "room_search_results",
                     "room_search_results": results,
-                    "page": page,
+                    "page": self.room_search_page,
                 },
             )
+            self.room_search_page += 1
 
     async def fetch_display_name(self, room):
         display_name = room.display_name
