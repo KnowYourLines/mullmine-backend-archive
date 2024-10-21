@@ -158,18 +158,28 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         self.user = None
         self.oldest_message_timestamp = None
         self.room_search_page = 1
+        self.room_size_query = None
+        self.room_name_query = None
 
     async def connect(self):
         await self.accept()
         self.user = self.scope["user"]
-        await self.room_search()
+        await self.room_search({})
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(str(self.room_id), self.channel_name)
 
-    async def room_search(self):
+    async def room_search(self, input_payload):
+        name_query = input_payload.get("name")
+        size_query = input_payload.get("max_size")
+        if isinstance(size_query, int) and size_query != self.room_size_query:
+            self.room_size_query = size_query
+            self.room_search_page = 1
+        if isinstance(name_query, str) and name_query != self.room_name_query:
+            self.room_name_query = name_query
+            self.room_search_page = 1
         results, page = await database_sync_to_async(room_search)(
-            self.room_search_page, self.user
+            self.room_search_page, self.user, self.room_size_query, self.room_name_query
         )
         if results:
             self.room_search_page = page + 1
@@ -178,6 +188,7 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
                 {
                     "type": "room_search_results",
                     "room_search_results": results,
+                    "page": page,
                 },
             )
 
@@ -341,7 +352,7 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         if content.get("command") == "update_member_limit":
             asyncio.create_task(self.update_member_limit(content))
         if content.get("command") == "fetch_next_room_search_results":
-            asyncio.create_task(self.room_search())
+            asyncio.create_task(self.room_search(content))
 
     async def room_search_results(self, event):
         # Send message to WebSocket

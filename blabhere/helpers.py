@@ -6,7 +6,7 @@ from django.db.models.lookups import GreaterThanOrEqual
 from blabhere.models import Room, Message, User, Conversation
 
 
-def room_search(page, user):
+def room_search(page, user, size_query, name_query):
     try:
         room_full = Case(
             When(GreaterThanOrEqual(F("num_members"), F("max_num_members")), then=True),
@@ -19,26 +19,32 @@ def room_search(page, user):
             .order_by("-created_at")
             .values("created_at")[:1]
         )
-        rooms = Paginator(
+        room_queryset = (
             Room.objects.all()
             .annotate(num_members=Count("members"))
             .annotate(room_full=room_full)
             .annotate(latest_message_timestamp=latest_message_timestamp)
             .exclude(id__in=user.room_set.values("id"))
             .exclude(room_full=True)
-            .order_by(
-                "-num_members",
-                F("latest_message_timestamp").desc(nulls_last=True),
-                "-created_at",
-            )
-            .values(
-                "display_name",
-                "created_at",
-                "id",
-                "num_members",
-                "max_num_members",
-                "latest_message_timestamp",
-            ),
+        )
+        if size_query:
+            room_queryset = room_queryset.filter(num_members__lte=size_query)
+        if name_query:
+            room_queryset = room_queryset.filter(display_name__contains=name_query)
+        room_queryset = room_queryset.order_by(
+            "-num_members",
+            F("latest_message_timestamp").desc(nulls_last=True),
+            "-created_at",
+        ).values(
+            "display_name",
+            "created_at",
+            "id",
+            "num_members",
+            "max_num_members",
+            "latest_message_timestamp",
+        )
+        rooms = Paginator(
+            room_queryset,
             10,
         )
         rooms = rooms.page(page)
