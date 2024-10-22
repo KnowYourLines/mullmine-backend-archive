@@ -55,9 +55,9 @@ def room_search(page, user, size_query, name_query):
                 ].timestamp()
             room["id"] = str(room["id"])
             room["created_at"] = room["created_at"].timestamp()
-        return rooms.object_list
+        return rooms.object_list, page
     except EmptyPage:
-        return []
+        return [], page
 
 
 def leave_room(user, room_id):
