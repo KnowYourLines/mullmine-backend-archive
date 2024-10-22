@@ -172,7 +172,9 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
     async def room_search(self, input_payload):
         name_query = input_payload.get("name")
         size_query = input_payload.get("max_size")
-        if isinstance(size_query, int) and size_query != self.room_size_query:
+        if (
+            isinstance(size_query, int) or size_query == ""
+        ) and size_query != self.room_size_query:
             self.room_size_query = size_query
             self.room_search_page = 1
         if isinstance(name_query, str) and name_query != self.room_name_query:
