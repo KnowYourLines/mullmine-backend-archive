@@ -1,3 +1,6 @@
+import logging
+
+from django.core.exceptions import ObjectDoesNotExist
 from django.core.paginator import Paginator, EmptyPage
 from django.db import IntegrityError
 from django.db.models import F, Count, OuterRef, Case, When, BooleanField
@@ -130,8 +133,11 @@ def check_room_full(room_id, user):
 
 
 def get_room(room_id):
-    room = Room.objects.get(id=room_id)
-    return room
+    try:
+        room = Room.objects.get(id=room_id)
+        return room
+    except ObjectDoesNotExist:
+        logging.error(f"Room id {room_id} does not exist")
 
 
 def initialize_room(room_id, user):
