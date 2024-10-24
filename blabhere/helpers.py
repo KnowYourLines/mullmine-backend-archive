@@ -125,7 +125,6 @@ def room_search(page, user, size_query, name_query):
             "created_at",
             "id",
             "num_members",
-            "max_num_members",
             "latest_message_timestamp",
         )
         rooms = Paginator(
