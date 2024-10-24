@@ -33,7 +33,7 @@ def room_search(page, user, size_query, name_query):
         user_active_rooms = user_rooms_msgs_count.filter(
             count_user_msgs__gte=avg_user_msgs_per_room
         )
-        count_room_msgs = Count("message")
+
         days_since_created = ExtractDay(
             ExpressionWrapper(Now() - F("created_at"), output_field=DurationField())
         )
@@ -61,10 +61,17 @@ def room_search(page, user, size_query, name_query):
             "message", filter=Q(message__creator__in=user_rooms_members)
         )
         count_user_active_rooms_members_msgs = Count(
-            "message", filter=Q(message__creator__in=user_active_rooms_members)
+            "message",
+            filter=Q(message__creator__in=user_active_rooms_members),
         )
-        senders_to_members = Cast(F("count_msg_senders"), FloatField()) / Cast(
-            F("num_members"), FloatField()
+        senders_to_members = Case(
+            When(
+                num_members__gt=0,
+                then=Cast(F("count_msg_senders"), FloatField())
+                / Cast(F("num_members"), FloatField()),
+            ),
+            default=F("count_msg_senders"),
+            output_field=FloatField(),
         )
         daily_msg_rate = Case(
             When(
@@ -95,9 +102,9 @@ def room_search(page, user, size_query, name_query):
             .annotate(count_user_rooms_members_msgs=count_user_rooms_members_msgs)
             .annotate(count_user_rooms_members=count_user_rooms_members)
             .annotate(count_msg_senders=count_msg_senders)
-            .annotate(count_room_msgs=count_room_msgs)
+            .annotate(count_room_msgs=Count("message", distinct=True))
             .annotate(days_since_created=days_since_created)
-            .annotate(num_members=Count("members"))
+            .annotate(num_members=Count("members", distinct=True))
             .annotate(senders_to_members=senders_to_members)
             .annotate(daily_msg_rate=daily_msg_rate)
             .annotate(room_full=room_full)
@@ -125,6 +132,7 @@ def room_search(page, user, size_query, name_query):
             "created_at",
             "id",
             "num_members",
+            "max_num_members",
             "latest_message_timestamp",
         )
         rooms = Paginator(
