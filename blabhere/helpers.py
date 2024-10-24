@@ -3,7 +3,20 @@ import logging
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.paginator import Paginator, EmptyPage
 from django.db import IntegrityError
-from django.db.models import F, Count, OuterRef, Case, When, BooleanField
+from django.db.models import (
+    F,
+    Count,
+    OuterRef,
+    Case,
+    When,
+    BooleanField,
+    Q,
+    Avg,
+    DurationField,
+    ExpressionWrapper,
+    FloatField,
+)
+from django.db.models.functions import Now, ExtractDay, Cast
 from django.db.models.lookups import GreaterThanOrEqual
 
 from blabhere.models import Room, Message, User, Conversation
@@ -11,6 +24,57 @@ from blabhere.models import Room, Message, User, Conversation
 
 def room_search(page, user, size_query, name_query):
     try:
+        count_user_msgs = Count("message", filter=Q(message__creator=user))
+        user_rooms_msgs_count = user.room_set.annotate(count_user_msgs=count_user_msgs)
+        avg_user_msgs_per_room = (
+            user_rooms_msgs_count.aggregate(average=Avg("count_user_msgs"))["average"]
+            or 0
+        )
+        user_active_rooms = user_rooms_msgs_count.filter(
+            count_user_msgs__gte=avg_user_msgs_per_room
+        )
+        count_room_msgs = Count("message")
+        days_since_created = ExtractDay(
+            ExpressionWrapper(Now() - F("created_at"), output_field=DurationField())
+        )
+        room_msg_senders = User.objects.filter(
+            message__room__id=OuterRef("id")
+        ).distinct()
+        count_msg_senders = Count("members", filter=Q(members__in=room_msg_senders))
+        user_rooms_members = (
+            User.objects.filter(room__in=user.room_set.all())
+            .exclude(id=user.id)
+            .distinct()
+        )
+        user_active_rooms_members = (
+            User.objects.filter(room__in=user_active_rooms)
+            .exclude(id=user.id)
+            .distinct()
+        )
+        count_user_rooms_members = Count(
+            "members", filter=Q(members__in=user_rooms_members)
+        )
+        count_user_active_rooms_members = Count(
+            "members", filter=Q(members__in=user_active_rooms_members)
+        )
+        count_user_rooms_members_msgs = Count(
+            "message", filter=Q(message__creator__in=user_rooms_members)
+        )
+        count_user_active_rooms_members_msgs = Count(
+            "message", filter=Q(message__creator__in=user_active_rooms_members)
+        )
+        senders_to_members = Cast(F("count_msg_senders"), FloatField()) / Cast(
+            F("num_members"), FloatField()
+        )
+        daily_msg_rate = Case(
+            When(
+                days_since_created__gt=0,
+                then=Cast(F("count_room_msgs"), FloatField())
+                / Cast(F("days_since_created"), FloatField()),
+            ),
+            default=F("count_room_msgs"),
+            output_field=FloatField(),
+        )
         room_full = Case(
             When(GreaterThanOrEqual(F("num_members"), F("max_num_members")), then=True),
             default=False,
@@ -24,7 +88,18 @@ def room_search(page, user, size_query, name_query):
         )
         room_queryset = (
             Room.objects.all()
+            .annotate(
+                count_user_active_rooms_members_msgs=count_user_active_rooms_members_msgs
+            )
+            .annotate(count_user_active_rooms_members=count_user_active_rooms_members)
+            .annotate(count_user_rooms_members_msgs=count_user_rooms_members_msgs)
+            .annotate(count_user_rooms_members=count_user_rooms_members)
+            .annotate(count_msg_senders=count_msg_senders)
+            .annotate(count_room_msgs=count_room_msgs)
+            .annotate(days_since_created=days_since_created)
             .annotate(num_members=Count("members"))
+            .annotate(senders_to_members=senders_to_members)
+            .annotate(daily_msg_rate=daily_msg_rate)
             .annotate(room_full=room_full)
             .annotate(latest_message_timestamp=latest_message_timestamp)
             .exclude(id__in=user.room_set.values("id"))
@@ -35,6 +110,13 @@ def room_search(page, user, size_query, name_query):
         if name_query:
             room_queryset = room_queryset.filter(display_name__contains=name_query)
         room_queryset = room_queryset.order_by(
+            "-count_user_active_rooms_members_msgs",
+            "-count_user_active_rooms_members",
+            "-count_user_rooms_members_msgs",
+            "-count_user_rooms_members",
+            "-senders_to_members",
+            "-daily_msg_rate",
+            "-count_room_msgs",
             "-num_members",
             F("latest_message_timestamp").desc(nulls_last=True),
             "-created_at",
