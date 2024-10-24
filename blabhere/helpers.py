@@ -266,13 +266,15 @@ def add_user_to_room(user, room):
     return member_display_names, was_added
 
 
-def update_room_name(name, room):
-    try:
-        room.display_name = name
-        room.save()
-        return True
-    except IntegrityError:
-        return False
+def update_room_name(name, room, user):
+    if room.creator and room.creator.username == user.username:
+        try:
+            room.display_name = name
+            room.save()
+            return True
+        except IntegrityError:
+            return False
+    return False
 
 
 def get_initial_messages(room):

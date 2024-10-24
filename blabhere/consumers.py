@@ -300,7 +300,7 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         if len(new_display_name.strip()) > 0:
             room = await database_sync_to_async(get_room)(self.room_id)
             succeeded = await database_sync_to_async(update_room_name)(
-                new_display_name, room
+                new_display_name, room, self.user
             )
             if succeeded:
                 await self.channel_layer.group_send(
