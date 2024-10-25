@@ -45,25 +45,25 @@ def room_search(page, user, size_query, name_query):
         count_msg_senders = Count(
             "members", filter=Q(members__in=room_msg_senders), distinct=True
         )
-        # user_rooms_members = (
-        #     User.objects.filter(room__in=user.room_set.all())
-        #     .exclude(id=user.id)
-        #     .distinct()
-        # )
+        user_rooms_members = (
+            User.objects.filter(room__in=user.room_set.all())
+            .exclude(id=user.id)
+            .distinct()
+        )
         user_active_rooms_members = (
             User.objects.filter(room__in=user_active_rooms)
             .exclude(id=user.id)
             .distinct()
         )
-        # count_user_rooms_members = Count(
-        #     "members", filter=Q(members__in=user_rooms_members)
-        # )
-        # count_user_active_rooms_members = Count(
-        #     "members", filter=Q(members__in=user_active_rooms_members)
-        # )
-        # count_user_rooms_members_msgs = Count(
-        #     "message", filter=Q(message__creator__in=user_rooms_members)
-        # )
+        count_user_rooms_members = Count(
+            "members", filter=Q(members__in=user_rooms_members), distinct=True
+        )
+        count_user_active_rooms_members = Count(
+            "members", filter=Q(members__in=user_active_rooms_members), distinct=True
+        )
+        count_user_rooms_members_msgs = Count(
+            "message", filter=Q(message__creator__in=user_rooms_members), distinct=True
+        )
         count_user_active_rooms_members_msgs = Count(
             "message",
             filter=Q(message__creator__in=user_active_rooms_members),
@@ -103,9 +103,9 @@ def room_search(page, user, size_query, name_query):
             .annotate(
                 count_user_active_rooms_members_msgs=count_user_active_rooms_members_msgs
             )
-            # .annotate(count_user_active_rooms_members=count_user_active_rooms_members)
-            # .annotate(count_user_rooms_members_msgs=count_user_rooms_members_msgs)
-            # .annotate(count_user_rooms_members=count_user_rooms_members)
+            .annotate(count_user_active_rooms_members=count_user_active_rooms_members)
+            .annotate(count_user_rooms_members_msgs=count_user_rooms_members_msgs)
+            .annotate(count_user_rooms_members=count_user_rooms_members)
             .annotate(count_msg_senders=count_msg_senders)
             .annotate(count_room_msgs=Count("message", distinct=True))
             .annotate(days_since_created=days_since_created)
@@ -123,9 +123,9 @@ def room_search(page, user, size_query, name_query):
             room_queryset = room_queryset.filter(display_name__contains=name_query)
         room_queryset = room_queryset.order_by(
             "-count_user_active_rooms_members_msgs",
-            # "-count_user_active_rooms_members",
-            # "-count_user_rooms_members_msgs",
-            # "-count_user_rooms_members",
+            "-count_user_active_rooms_members",
+            "-count_user_rooms_members_msgs",
+            "-count_user_rooms_members",
             "-senders_to_members",
             "-daily_msg_rate",
             "-count_room_msgs",
