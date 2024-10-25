@@ -24,15 +24,17 @@ from blabhere.models import Room, Message, User, Conversation
 
 def room_search(page, user, size_query, name_query):
     try:
-        # count_user_msgs = Count("message", filter=Q(message__creator=user))
-        # user_rooms_msgs_count = user.room_set.annotate(count_user_msgs=count_user_msgs)
-        # avg_user_msgs_per_room = (
-        #     user_rooms_msgs_count.aggregate(average=Avg("count_user_msgs"))["average"]
-        #     or 0
-        # )
-        # user_active_rooms = user_rooms_msgs_count.filter(
-        #     count_user_msgs__gte=avg_user_msgs_per_room
-        # )
+        count_user_msgs = Count(
+            "message", filter=Q(message__creator=user), distinct=True
+        )
+        user_rooms_msgs_count = user.room_set.annotate(count_user_msgs=count_user_msgs)
+        avg_user_msgs_per_room = (
+            user_rooms_msgs_count.aggregate(average=Avg("count_user_msgs"))["average"]
+            or 0
+        )
+        user_active_rooms = user_rooms_msgs_count.filter(
+            count_user_msgs__gte=avg_user_msgs_per_room
+        )
 
         days_since_created = ExtractDay(
             ExpressionWrapper(Now() - F("created_at"), output_field=DurationField())
@@ -48,11 +50,11 @@ def room_search(page, user, size_query, name_query):
         #     .exclude(id=user.id)
         #     .distinct()
         # )
-        # user_active_rooms_members = (
-        #     User.objects.filter(room__in=user_active_rooms)
-        #     .exclude(id=user.id)
-        #     .distinct()
-        # )
+        user_active_rooms_members = (
+            User.objects.filter(room__in=user_active_rooms)
+            .exclude(id=user.id)
+            .distinct()
+        )
         # count_user_rooms_members = Count(
         #     "members", filter=Q(members__in=user_rooms_members)
         # )
@@ -62,10 +64,11 @@ def room_search(page, user, size_query, name_query):
         # count_user_rooms_members_msgs = Count(
         #     "message", filter=Q(message__creator__in=user_rooms_members)
         # )
-        # count_user_active_rooms_members_msgs = Count(
-        #     "message",
-        #     filter=Q(message__creator__in=user_active_rooms_members),
-        # )
+        count_user_active_rooms_members_msgs = Count(
+            "message",
+            filter=Q(message__creator__in=user_active_rooms_members),
+            distinct=True,
+        )
         senders_to_members = Case(
             When(
                 num_members__gt=0,
@@ -97,9 +100,9 @@ def room_search(page, user, size_query, name_query):
         )
         room_queryset = (
             Room.objects.all()
-            # .annotate(
-            #     count_user_active_rooms_members_msgs=count_user_active_rooms_members_msgs
-            # )
+            .annotate(
+                count_user_active_rooms_members_msgs=count_user_active_rooms_members_msgs
+            )
             # .annotate(count_user_active_rooms_members=count_user_active_rooms_members)
             # .annotate(count_user_rooms_members_msgs=count_user_rooms_members_msgs)
             # .annotate(count_user_rooms_members=count_user_rooms_members)
@@ -119,7 +122,7 @@ def room_search(page, user, size_query, name_query):
         if name_query:
             room_queryset = room_queryset.filter(display_name__contains=name_query)
         room_queryset = room_queryset.order_by(
-            # "-count_user_active_rooms_members_msgs",
+            "-count_user_active_rooms_members_msgs",
             # "-count_user_active_rooms_members",
             # "-count_user_rooms_members_msgs",
             # "-count_user_rooms_members",
