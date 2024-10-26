@@ -114,7 +114,6 @@ def room_search(page, user, size_query, name_query):
             .annotate(daily_msg_rate=daily_msg_rate)
             .annotate(room_full=room_full)
             .annotate(latest_message_timestamp=latest_message_timestamp)
-            .exclude(id__in=user.room_set.values("id"))
             .exclude(room_full=True)
         )
         if size_query:
