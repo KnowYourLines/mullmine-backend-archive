@@ -232,6 +232,12 @@ def get_room(room_id):
 
 
 def initialize_room(room_id, user):
+    if not user.is_verified:
+        try:
+            room = Room.objects.get(id=room_id)
+        except ObjectDoesNotExist:
+            return None
+        return room
     room, created = Room.objects.get_or_create(
         id=room_id,
         defaults={"display_name": room_id, "creator": user},

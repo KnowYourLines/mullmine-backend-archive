@@ -263,12 +263,17 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             room = await database_sync_to_async(initialize_room)(
                 self.room_id, self.user
             )
-            await self.fetch_member_display_names(room)
-            await self.fetch_display_name(room)
-            await self.fetch_initial_messages(room)
-            await self.fetch_member_limit(room)
-            await self.fetch_is_creator(room)
-            await self.read_conversation()
+            if room:
+                await self.fetch_member_display_names(room)
+                await self.fetch_display_name(room)
+                await self.fetch_initial_messages(room)
+                await self.fetch_member_limit(room)
+                await self.fetch_is_creator(room)
+                await self.read_conversation()
+            else:
+                await self.channel_layer.send(
+                    self.channel_name, {"type": "room_exists", "room_exists": False}
+                )
         else:
             await self.channel_layer.send(
                 self.channel_name, {"type": "is_room_full", "is_room_full": True}
@@ -278,7 +283,7 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         message = input_payload.get("message", "")
         room = await database_sync_to_async(get_room)(self.room_id)
         creator = await database_sync_to_async(get_user)(self.user.username)
-        if len(message.strip()) > 0:
+        if len(message.strip()) > 0 and creator.is_verified:
             new_message = await database_sync_to_async(create_new_message)(
                 message, room, creator
             )
@@ -355,6 +360,10 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             asyncio.create_task(self.update_member_limit(content))
         if content.get("command") == "fetch_next_room_search_results":
             asyncio.create_task(self.room_search(content))
+
+    async def room_exists(self, event):
+        # Send message to WebSocket
+        await self.send_json(event)
 
     async def room_search_results(self, event):
         # Send message to WebSocket
