@@ -169,8 +169,7 @@ def read_unread_conversation(room_id, user):
     room = Room.objects.get(id=room_id)
     conversation = Conversation.objects.get(participant=user, room=room)
     if not conversation.read:
-        conversation.read = True
-        conversation.save()
+        Conversation.objects.filter(id=conversation.id).update(read=True)
 
 
 def get_user_conversations(username):
@@ -208,8 +207,7 @@ def is_room_creator(room, user):
 
 def update_member_limit(new_limit, room, user):
     if room.creator and room.creator.username == user.username:
-        room.max_num_members = new_limit
-        room.save()
+        Room.objects.filter(id=room.id).update(max_num_members=new_limit)
     return room
 
 
@@ -280,8 +278,7 @@ def add_user_to_room(user, room):
 def update_room_name(name, room, user):
     if room.creator and room.creator.username == user.username:
         try:
-            room.display_name = name
-            room.save()
+            Room.objects.filter(id=room.id).update(display_name=name)
             return True
         except IntegrityError:
             return False
@@ -337,9 +334,9 @@ def create_new_message(content, room, creator):
 def update_conversations_for_new_message(room, message):
     for user in room.members.all():
         conversation = Conversation.objects.get(participant=user, room=room)
-        conversation.latest_message = message
-        conversation.read = user == message.creator
-        conversation.save()
+        Conversation.objects.filter(id=conversation.id).update(
+            latest_message=message, read=user == message.creator
+        )
 
 
 def get_prev_messages(oldest_msg_id, room):
@@ -371,8 +368,7 @@ def change_user_display_name(user, new_name):
         ).values("participant__username")
     ]
     try:
-        user.display_name = new_name
-        user.save()
+        User.objects.filter(id=user.id).update(display_name=new_name)
         return True, new_name, rooms_to_refresh, users_to_refresh
     except IntegrityError:
         return False, new_name, rooms_to_refresh, users_to_refresh
