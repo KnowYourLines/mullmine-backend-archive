@@ -53,11 +53,7 @@ def check_room_full(room_id, user):
     if room.exists():
         room = room.first()
         is_member = room.members.filter(username=user.username).exists()
-        return (
-            room.max_num_members
-            and not (room.members.all().count() < room.max_num_members)
-            and not is_member
-        )
+        return room.members.all().count() >= 2 and not is_member
 
 
 def get_room(room_id):
