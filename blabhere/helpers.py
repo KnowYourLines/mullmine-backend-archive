@@ -28,7 +28,6 @@ def get_user_conversations(username):
     conversations = list(
         user.conversation_set.values(
             "room__id",
-            "room__display_name",
             "read",
             "latest_message__creator__display_name",
             "latest_message__content",
@@ -73,7 +72,6 @@ def initialize_room(room_id, user):
         return room
     room, created = Room.objects.get_or_create(
         id=room_id,
-        defaults={"display_name": room_id, "creator": user},
     )
     return room
 
