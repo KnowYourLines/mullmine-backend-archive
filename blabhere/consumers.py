@@ -11,21 +11,16 @@ from blabhere.helpers import (
     get_prev_messages,
     get_initial_messages,
     create_new_message,
-    update_room_name,
     change_user_display_name,
     get_all_member_display_names,
     get_user,
     initialize_room,
     get_refreshed_messages,
-    update_member_limit,
-    check_room_full,
-    is_room_creator,
-    get_num_room_members,
     get_user_conversations,
     get_all_member_usernames,
     read_unread_conversation,
     leave_room,
-    room_search,
+    check_room_full,
 )
 
 logger = logging.getLogger(__name__)
@@ -157,49 +152,13 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         self.room_id = None
         self.user = None
         self.oldest_message_timestamp = None
-        self.room_search_page = 1
-        self.room_size_query = None
-        self.room_name_query = None
 
     async def connect(self):
         await self.accept()
         self.user = self.scope["user"]
-        await self.room_search({})
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(str(self.room_id), self.channel_name)
-
-    async def room_search(self, input_payload):
-        name_query = input_payload.get("name")
-        size_query = input_payload.get("max_size")
-        if (
-            isinstance(size_query, int) or size_query == ""
-        ) and size_query != self.room_size_query:
-            self.room_size_query = size_query
-            self.room_search_page = 1
-        if isinstance(name_query, str) and name_query != self.room_name_query:
-            self.room_name_query = name_query
-            self.room_search_page = 1
-        results, page = await database_sync_to_async(room_search)(
-            self.room_search_page, self.user, self.room_size_query, self.room_name_query
-        )
-        await self.channel_layer.send(
-            self.channel_name,
-            {
-                "type": "room_search_results",
-                "room_search_results": results,
-                "page": page,
-            },
-        )
-        if results:
-            self.room_search_page = page + 1
-
-    async def fetch_display_name(self, room):
-        display_name = room.display_name
-        await self.channel_layer.send(
-            self.channel_name,
-            {"type": "display_name", "display_name": display_name},
-        )
 
     async def fetch_member_display_names(self, room):
         member_display_names, was_added = await database_sync_to_async(
@@ -222,19 +181,6 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         messages = await database_sync_to_async(get_initial_messages)(room)
         await self.channel_layer.send(
             self.channel_name, {"type": "messages", "messages": messages}
-        )
-
-    async def fetch_is_creator(self, room):
-        is_creator = await database_sync_to_async(is_room_creator)(room, self.user)
-        await self.channel_layer.send(
-            self.channel_name,
-            {"type": "is_room_creator", "is_room_creator": is_creator},
-        )
-
-    async def fetch_member_limit(self, room):
-        await self.channel_layer.send(
-            self.channel_name,
-            {"type": "member_limit", "member_limit": room.max_num_members},
         )
 
     async def fetch_prev_messages(self, input_payload):
@@ -265,10 +211,7 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             )
             if room:
                 await self.fetch_member_display_names(room)
-                await self.fetch_display_name(room)
                 await self.fetch_initial_messages(room)
-                await self.fetch_member_limit(room)
-                await self.fetch_is_creator(room)
                 await self.read_conversation()
             else:
                 await self.channel_layer.send(
@@ -300,48 +243,6 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
                 {"type": "new_message", "new_message": new_message},
             )
 
-    async def update_display_name(self, input_payload):
-        new_display_name = input_payload.get("new_display_name", "")
-        if len(new_display_name.strip()) > 0:
-            room = await database_sync_to_async(get_room)(self.room_id)
-            succeeded = await database_sync_to_async(update_room_name)(
-                new_display_name, room, self.user
-            )
-            if succeeded:
-                await self.channel_layer.group_send(
-                    self.room_id,
-                    {"type": "display_name", "display_name": room.display_name},
-                )
-                usernames = await database_sync_to_async(get_all_member_usernames)(
-                    self.room_id
-                )
-                for username in usernames:
-                    await self.channel_layer.group_send(
-                        username,
-                        {"type": "refresh_conversations"},
-                    )
-            else:
-                await self.channel_layer.send(
-                    self.channel_name,
-                    {
-                        "type": "display_name_taken",
-                        "display_name_taken": new_display_name,
-                    },
-                )
-
-    async def update_member_limit(self, input_payload):
-        room = await database_sync_to_async(get_room)(self.room_id)
-        num_members = await database_sync_to_async(get_num_room_members)(room)
-        new_limit = int(input_payload.get("max_num_members", None))
-        if new_limit and new_limit >= num_members:
-            room = await database_sync_to_async(update_member_limit)(
-                new_limit, room, self.user
-            )
-            await self.channel_layer.group_send(
-                self.room_id,
-                {"type": "member_limit", "member_limit": room.max_num_members},
-            )
-
     async def receive_json(self, content, **kwargs):
         if content.get("command") == "connect":
             if self.room_id:
@@ -354,30 +255,8 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             asyncio.create_task(self.send_message(content))
         if content.get("command") == "fetch_prev_messages":
             asyncio.create_task(self.fetch_prev_messages(content))
-        if content.get("command") == "update_display_name":
-            asyncio.create_task(self.update_display_name(content))
-        if content.get("command") == "update_member_limit":
-            asyncio.create_task(self.update_member_limit(content))
-        if content.get("command") == "fetch_next_room_search_results":
-            asyncio.create_task(self.room_search(content))
 
     async def room_exists(self, event):
-        # Send message to WebSocket
-        await self.send_json(event)
-
-    async def room_search_results(self, event):
-        # Send message to WebSocket
-        await self.send_json(event)
-
-    async def display_name_taken(self, event):
-        # Send message to WebSocket
-        await self.send_json(event)
-
-    async def member_limit(self, event):
-        # Send message to WebSocket
-        await self.send_json(event)
-
-    async def is_room_full(self, event):
         # Send message to WebSocket
         await self.send_json(event)
 
@@ -388,11 +267,7 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             await self.channel_layer.group_discard(str(self.room_id), self.channel_name)
             await self.send_json(event)
 
-    async def is_room_creator(self, event):
-        # Send message to WebSocket
-        await self.send_json(event)
-
-    async def display_name(self, event):
+    async def is_room_full(self, event):
         # Send message to WebSocket
         await self.send_json(event)
 

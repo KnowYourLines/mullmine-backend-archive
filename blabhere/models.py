@@ -13,11 +13,6 @@ class User(AbstractUser):
 class Room(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     members = models.ManyToManyField(User)
-    display_name = models.CharField(max_length=150, unique=True)
-    creator = models.ForeignKey(
-        User, on_delete=models.SET_NULL, null=True, related_name="rooms_created"
-    )
-    max_num_members = models.PositiveBigIntegerField(null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
 

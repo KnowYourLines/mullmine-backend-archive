@@ -1,159 +1,10 @@
 import logging
 
 from django.core.exceptions import ObjectDoesNotExist
-from django.core.paginator import Paginator, EmptyPage
 from django.db import IntegrityError
-from django.db.models import (
-    F,
-    Count,
-    OuterRef,
-    Case,
-    When,
-    BooleanField,
-    Q,
-    Avg,
-    DurationField,
-    ExpressionWrapper,
-    FloatField,
-)
-from django.db.models.functions import Now, ExtractDay, Cast
-from django.db.models.lookups import GreaterThanOrEqual
+from django.db.models import F
 
 from blabhere.models import Room, Message, User, Conversation
-
-
-def room_search(page, user, size_query, name_query):
-    try:
-        count_user_msgs = Count(
-            "message", filter=Q(message__creator=user), distinct=True
-        )
-        user_rooms_msgs_count = user.room_set.annotate(count_user_msgs=count_user_msgs)
-        avg_user_msgs_per_room = (
-            user_rooms_msgs_count.aggregate(average=Avg("count_user_msgs"))["average"]
-            or 0
-        )
-        user_active_rooms = user_rooms_msgs_count.filter(
-            count_user_msgs__gte=avg_user_msgs_per_room
-        )
-
-        days_since_created = ExtractDay(
-            ExpressionWrapper(Now() - F("created_at"), output_field=DurationField())
-        )
-        room_msg_senders = User.objects.filter(
-            message__room__id=OuterRef("id")
-        ).distinct()
-        count_msg_senders = Count(
-            "members", filter=Q(members__in=room_msg_senders), distinct=True
-        )
-        user_rooms_members = (
-            User.objects.filter(room__in=user.room_set.all())
-            .exclude(id=user.id)
-            .distinct()
-        )
-        user_active_rooms_members = (
-            User.objects.filter(room__in=user_active_rooms)
-            .exclude(id=user.id)
-            .distinct()
-        )
-        count_user_rooms_members = Count(
-            "members", filter=Q(members__in=user_rooms_members), distinct=True
-        )
-        count_user_active_rooms_members = Count(
-            "members", filter=Q(members__in=user_active_rooms_members), distinct=True
-        )
-        count_user_rooms_members_msgs = Count(
-            "message", filter=Q(message__creator__in=user_rooms_members), distinct=True
-        )
-        count_user_active_rooms_members_msgs = Count(
-            "message",
-            filter=Q(message__creator__in=user_active_rooms_members),
-            distinct=True,
-        )
-        senders_to_members = Case(
-            When(
-                num_members__gt=0,
-                then=Cast(F("count_msg_senders"), FloatField())
-                / Cast(F("num_members"), FloatField()),
-            ),
-            default=F("count_msg_senders"),
-            output_field=FloatField(),
-        )
-        daily_msg_rate = Case(
-            When(
-                days_since_created__gt=0,
-                then=Cast(F("count_room_msgs"), FloatField())
-                / Cast(F("days_since_created"), FloatField()),
-            ),
-            default=F("count_room_msgs"),
-            output_field=FloatField(),
-        )
-        room_full = Case(
-            When(GreaterThanOrEqual(F("num_members"), F("max_num_members")), then=True),
-            default=False,
-            output_field=BooleanField(),
-        )
-
-        latest_message_timestamp = (
-            Message.objects.filter(room__id=OuterRef("id"))
-            .order_by("-created_at")
-            .values("created_at")[:1]
-        )
-        room_queryset = (
-            Room.objects.all()
-            .annotate(
-                count_user_active_rooms_members_msgs=count_user_active_rooms_members_msgs
-            )
-            .annotate(count_user_active_rooms_members=count_user_active_rooms_members)
-            .annotate(count_user_rooms_members_msgs=count_user_rooms_members_msgs)
-            .annotate(count_user_rooms_members=count_user_rooms_members)
-            .annotate(count_msg_senders=count_msg_senders)
-            .annotate(count_room_msgs=Count("message", distinct=True))
-            .annotate(days_since_created=days_since_created)
-            .annotate(num_members=Count("members", distinct=True))
-            .annotate(senders_to_members=senders_to_members)
-            .annotate(daily_msg_rate=daily_msg_rate)
-            .annotate(room_full=room_full)
-            .annotate(latest_message_timestamp=latest_message_timestamp)
-            .exclude(room_full=True)
-        )
-        if size_query:
-            room_queryset = room_queryset.filter(num_members__lte=size_query)
-        if name_query:
-            room_queryset = room_queryset.filter(display_name__contains=name_query)
-        room_queryset = room_queryset.order_by(
-            "-count_user_active_rooms_members_msgs",
-            "-count_user_active_rooms_members",
-            "-count_user_rooms_members_msgs",
-            "-count_user_rooms_members",
-            "-senders_to_members",
-            "-daily_msg_rate",
-            "-count_room_msgs",
-            "-num_members",
-            F("latest_message_timestamp").desc(nulls_last=True),
-            "-created_at",
-        ).values(
-            "display_name",
-            "created_at",
-            "id",
-            "num_members",
-            "max_num_members",
-            "latest_message_timestamp",
-        )
-        rooms = Paginator(
-            room_queryset,
-            10,
-        )
-        rooms = rooms.page(page)
-        for room in rooms:
-            if room["latest_message_timestamp"]:
-                room["latest_message_timestamp"] = room[
-                    "latest_message_timestamp"
-                ].timestamp()
-            room["id"] = str(room["id"])
-            room["created_at"] = room["created_at"].timestamp()
-        return rooms.object_list, page
-    except EmptyPage:
-        return [], page
 
 
 def leave_room(user, room_id):
@@ -195,20 +46,6 @@ def get_user_conversations(username):
                 "latest_message__created_at"
             ].timestamp()
     return conversations
-
-
-def get_num_room_members(room):
-    return room.members.all().count()
-
-
-def is_room_creator(room, user):
-    return room.creator and room.creator.username == user.username
-
-
-def update_member_limit(new_limit, room, user):
-    if room.creator and room.creator.username == user.username:
-        Room.objects.filter(id=room.id).update(max_num_members=new_limit)
-    return room
 
 
 def check_room_full(room_id, user):
@@ -279,16 +116,6 @@ def add_user_to_room(user, room):
         was_added = True
     member_display_names = get_all_member_display_names(room.id)
     return member_display_names, was_added
-
-
-def update_room_name(name, room, user):
-    if room.creator and room.creator.username == user.username:
-        try:
-            Room.objects.filter(id=room.id).update(display_name=name)
-            return True
-        except IntegrityError:
-            return False
-    return False
 
 
 def get_initial_messages(room):
