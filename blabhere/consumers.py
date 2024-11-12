@@ -54,6 +54,14 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
             self.user.username,
             {"type": "refresh_conversations"},
         )
+        usernames = await database_sync_to_async(get_all_member_usernames)(
+            input_payload["room_id"]
+        )
+        for username in usernames:
+            await self.channel_layer.group_send(
+                username,
+                {"type": "refresh_conversations"},
+            )
         members = await database_sync_to_async(get_all_member_display_names)(
             input_payload["room_id"]
         )
@@ -214,6 +222,14 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
                 await self.channel_layer.send(
                     self.channel_name, {"type": "room", "room": str(room.id)}
                 )
+                usernames = await database_sync_to_async(get_all_member_usernames)(
+                    self.room_id
+                )
+                for username in usernames:
+                    await self.channel_layer.group_send(
+                        username,
+                        {"type": "refresh_conversations"},
+                    )
 
     async def send_message(self, input_payload):
         message = input_payload.get("message", "")

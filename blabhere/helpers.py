@@ -75,13 +75,14 @@ def get_room(room_id):
 
 def find_waiting_room(user):
     num_members = Count("members", distinct=True)
+    user_rooms_members = User.objects.filter(room__in=user.room_set.all()).distinct()
     waiting_rooms = (
         Room.objects.all().annotate(num_members=num_members).filter(num_members=1)
     )
-    other_users_waiting_rooms = waiting_rooms.exclude(members=user).order_by(
-        "-created_at"
-    )
-    your_own_waiting_rooms = waiting_rooms.order_by("-created_at")
+    other_users_waiting_rooms = waiting_rooms.exclude(
+        members__in=user_rooms_members
+    ).order_by("-created_at")
+    your_own_waiting_rooms = waiting_rooms.filter(members=user).order_by("-created_at")
     if other_users_waiting_rooms.exists():
         return other_users_waiting_rooms.first()
     elif your_own_waiting_rooms.exists():
