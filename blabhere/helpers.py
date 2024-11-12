@@ -64,16 +64,15 @@ def get_room(room_id):
 
 
 def initialize_room(room_id, user):
-    if not user.is_verified:
-        try:
-            room = Room.objects.get(id=room_id)
-        except ObjectDoesNotExist:
-            return None
+    if user.is_verified:
+        if room_id:
+            try:
+                room = Room.objects.get(id=room_id)
+            except ObjectDoesNotExist:
+                return None
+            return room
+        room = Room.objects.create()
         return room
-    room, created = Room.objects.get_or_create(
-        id=room_id,
-    )
-    return room
 
 
 def get_user(username):

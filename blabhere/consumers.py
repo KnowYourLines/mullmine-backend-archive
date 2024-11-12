@@ -200,27 +200,20 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             },
         )
 
-    async def initialize_room(self):
-        is_room_full = await database_sync_to_async(check_room_full)(
-            self.room_id, self.user
-        )
+    async def initialize_room(self, input_payload):
+        room_id = input_payload.get("room")
+        is_room_full = await database_sync_to_async(check_room_full)(room_id, self.user)
         if not is_room_full:
-            await self.channel_layer.group_add(self.room_id, self.channel_name)
-            room = await database_sync_to_async(initialize_room)(
-                self.room_id, self.user
-            )
+            room = await database_sync_to_async(initialize_room)(room_id, self.user)
             if room:
+                self.room_id = str(room.id)
+                await self.channel_layer.group_add(self.room_id, self.channel_name)
                 await self.fetch_member_display_names(room)
                 await self.fetch_initial_messages(room)
                 await self.read_conversation()
-            else:
                 await self.channel_layer.send(
-                    self.channel_name, {"type": "room_exists", "room_exists": False}
+                    self.channel_name, {"type": "room", "room": str(room.id)}
                 )
-        else:
-            await self.channel_layer.send(
-                self.channel_name, {"type": "is_room_full", "is_room_full": True}
-            )
 
     async def send_message(self, input_payload):
         message = input_payload.get("message", "")
@@ -249,14 +242,13 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
                 await self.channel_layer.group_discard(
                     str(self.room_id), self.channel_name
                 )
-            self.room_id = content.get("room")
-            asyncio.create_task(self.initialize_room())
+            asyncio.create_task(self.initialize_room(content))
         if content.get("command") == "send_message":
             asyncio.create_task(self.send_message(content))
         if content.get("command") == "fetch_prev_messages":
             asyncio.create_task(self.fetch_prev_messages(content))
 
-    async def room_exists(self, event):
+    async def room(self, event):
         # Send message to WebSocket
         await self.send_json(event)
 
@@ -266,10 +258,6 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         if username == self.user.username:
             await self.channel_layer.group_discard(str(self.room_id), self.channel_name)
             await self.send_json(event)
-
-    async def is_room_full(self, event):
-        # Send message to WebSocket
-        await self.send_json(event)
 
     async def members(self, event):
         # Send message to WebSocket
