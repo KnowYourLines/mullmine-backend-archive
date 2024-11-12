@@ -83,13 +83,18 @@ def find_waiting_room(user):
         members__in=user_rooms_members
     ).order_by("-created_at")
     your_own_waiting_rooms = waiting_rooms.filter(members=user).order_by("-created_at")
-    if other_users_waiting_rooms.exists():
+    pks_of_rooms_to_delete = list(
+        your_own_waiting_rooms[1:].values_list("pk", flat=True)
+    )
+    Room.objects.filter(pk__in=pks_of_rooms_to_delete).delete()
+    if other_users_waiting_rooms.exists() and your_own_waiting_rooms.exists():
+        your_waiting_room = your_own_waiting_rooms.first()
+        other_user_waiting_room = other_users_waiting_rooms.first()
+        your_waiting_room.delete()
+        return other_user_waiting_room
+    elif other_users_waiting_rooms.exists():
         return other_users_waiting_rooms.first()
     elif your_own_waiting_rooms.exists():
-        pks_of_rooms_to_delete = list(
-            your_own_waiting_rooms[1:].values_list("pk", flat=True)
-        )
-        Room.objects.filter(pk__in=pks_of_rooms_to_delete).delete()
         return your_own_waiting_rooms.first()
     else:
         return Room.objects.create()
@@ -100,9 +105,10 @@ def initialize_room(room_id, user):
         if room_id:
             try:
                 room = Room.objects.get(id=room_id)
+                if room.members.all().count() == 2:
+                    return room
             except ObjectDoesNotExist:
                 return None
-            return room
         room = find_waiting_room(user)
         return room
 
