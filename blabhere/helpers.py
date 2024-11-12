@@ -86,6 +86,10 @@ def find_waiting_room(user):
     if other_users_waiting_rooms.exists():
         return other_users_waiting_rooms.first()
     elif your_own_waiting_rooms.exists():
+        pks_of_rooms_to_delete = list(
+            your_own_waiting_rooms[1:].values_list("pk", flat=True)
+        )
+        Room.objects.filter(pk__in=pks_of_rooms_to_delete).delete()
         return your_own_waiting_rooms.first()
     else:
         return Room.objects.create()
