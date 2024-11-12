@@ -1,8 +1,9 @@
 import logging
 
+from django.contrib.postgres.aggregates import ArrayAgg
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
-from django.db.models import F, Count
+from django.db.models import F, Count, Case, When, Q
 
 from blabhere.models import Room, Message, User, Conversation
 
@@ -26,14 +27,23 @@ def read_unread_conversation(room_id, user):
 def get_user_conversations(username):
     user = User.objects.get(username=username)
     conversations = list(
-        user.conversation_set.values(
+        user.conversation_set.annotate(
+            other_members=ArrayAgg(
+                "room__members__display_name",
+                filter=~Q(room__members__display_name=user.display_name),
+                distinct=True,
+            )
+        )
+        .values(
             "room__id",
             "read",
             "latest_message__creator__display_name",
             "latest_message__content",
             "latest_message__created_at",
+            "other_members",
             "created_at",
-        ).order_by(
+        )
+        .order_by(
             "read", F("latest_message__created_at").desc(nulls_last=True), "-created_at"
         )
     )
