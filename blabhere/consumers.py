@@ -49,28 +49,18 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
         )
 
     async def exit_room(self, input_payload):
-        await database_sync_to_async(leave_room)(self.user, input_payload["room_id"])
-        await self.channel_layer.group_send(
-            self.user.username,
-            {"type": "refresh_conversations"},
-        )
         usernames = await database_sync_to_async(get_all_member_usernames)(
             input_payload["room_id"]
         )
+        await database_sync_to_async(leave_room)(self.user, input_payload["room_id"])
         for username in usernames:
             await self.channel_layer.group_send(
                 username,
                 {"type": "refresh_conversations"},
             )
-        members = await database_sync_to_async(get_all_member_display_names)(
-            input_payload["room_id"]
-        )
-        await self.channel_layer.group_send(
-            input_payload["room_id"], {"type": "members", "members": members}
-        )
         await self.channel_layer.group_send(
             input_payload["room_id"],
-            {"type": "user_left_room", "user_left_room": self.user.username},
+            {"type": "user_left_room"},
         )
 
     async def connect(self):
@@ -270,10 +260,8 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
 
     async def user_left_room(self, event):
         # Send message to WebSocket
-        username = event["user_left_room"]
-        if username == self.user.username:
-            await self.channel_layer.group_discard(str(self.room_id), self.channel_name)
-            await self.send_json(event)
+        await self.send_json(event)
+        await self.channel_layer.group_discard(str(self.room_id), self.channel_name)
 
     async def members(self, event):
         # Send message to WebSocket

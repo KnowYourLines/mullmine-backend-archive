@@ -3,17 +3,14 @@ import logging
 from django.contrib.postgres.aggregates import ArrayAgg
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
-from django.db.models import F, Count, Case, When, Q
+from django.db.models import F, Count, Q
 
 from blabhere.models import Room, Message, User, Conversation
 
 
 def leave_room(user, room_id):
     room_to_leave = Room.objects.get(id=room_id)
-    room_to_leave.members.remove(user)
-    user.room_set.remove(room_to_leave)
-    user.conversation_set.filter(room=room_to_leave).delete()
-    if not room_to_leave.members.all():
+    if user in room_to_leave.members.all():
         room_to_leave.delete()
 
 
@@ -73,20 +70,21 @@ def get_room(room_id):
         logging.error(f"Room id {room_id} does not exist")
 
 
-def find_waiting_room(user):
+def get_waiting_rooms():
     num_members = Count("members", distinct=True)
-    user_rooms_members = User.objects.filter(room__in=user.room_set.all()).distinct()
     waiting_rooms = (
         Room.objects.all().annotate(num_members=num_members).filter(num_members=1)
     )
+    return waiting_rooms
+
+
+def find_waiting_room(user):
+    waiting_rooms = get_waiting_rooms()
+    user_rooms_members = User.objects.filter(room__in=user.room_set.all()).distinct()
     other_users_waiting_rooms = waiting_rooms.exclude(
         members__in=user_rooms_members
     ).order_by("-created_at")
     your_own_waiting_rooms = waiting_rooms.filter(members=user).order_by("-created_at")
-    pks_of_rooms_to_delete = list(
-        your_own_waiting_rooms[1:].values_list("pk", flat=True)
-    )
-    Room.objects.filter(pk__in=pks_of_rooms_to_delete).delete()
     if other_users_waiting_rooms.exists() and your_own_waiting_rooms.exists():
         your_waiting_room = your_own_waiting_rooms.first()
         other_user_waiting_room = other_users_waiting_rooms.first()
@@ -105,12 +103,11 @@ def initialize_room(room_id, user):
         if room_id:
             try:
                 room = Room.objects.get(id=room_id)
-                if room.members.all().count() == 2:
+                if room.members.count() == 2:
                     return room
             except ObjectDoesNotExist:
                 return None
-        room = find_waiting_room(user)
-        return room
+        return find_waiting_room(user)
 
 
 def get_user(username):
