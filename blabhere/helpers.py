@@ -3,9 +3,13 @@ import logging
 from django.contrib.postgres.aggregates import ArrayAgg
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
-from django.db.models import F, Count, Q
+from django.db.models import F, Count, Q, Case, When, FloatField
+from django.db.models.functions import Cast
+from django.db.models.lookups import GreaterThan, GreaterThanOrEqual
 
 from blabhere.models import Room, Message, User, Conversation
+
+FULL_ROOM_NUM_MEMBERS = 2
 
 
 def leave_room(user, room_id):
@@ -59,7 +63,7 @@ def check_room_full(room_id, user):
     if room.exists():
         room = room.first()
         is_member = room.members.filter(username=user.username).exists()
-        return room.members.all().count() >= 2 and not is_member
+        return room.members.all().count() >= FULL_ROOM_NUM_MEMBERS and not is_member
 
 
 def get_room(room_id):
@@ -68,6 +72,69 @@ def get_room(room_id):
         return room
     except ObjectDoesNotExist:
         logging.error(f"Room id {room_id} does not exist")
+
+
+def get_most_chatted_users(user, exclude_room_ids=None):
+    num_members = Count("members", distinct=True)
+    num_messages = Count("message", distinct=True)
+    num_your_messages = Count("message", filter=Q(message__creator=user), distinct=True)
+    num_not_your_messages = Count(
+        "message", filter=~Q(message__creator=user), distinct=True
+    )
+    chattiness_score = Case(
+        When(
+            GreaterThan(F("num_your_messages"), 0)
+            & GreaterThan(F("num_not_your_messages"), 0)
+            & GreaterThanOrEqual(F("num_your_messages"), F("num_not_your_messages")),
+            then=Cast(F("num_your_messages"), FloatField())
+            / Cast(F("num_not_your_messages"), FloatField()),
+        ),
+        When(
+            GreaterThan(F("num_your_messages"), 0)
+            & GreaterThan(F("num_not_your_messages"), 0)
+            & GreaterThanOrEqual(F("num_not_your_messages"), F("num_your_messages")),
+            then=Cast(F("num_not_your_messages"), FloatField())
+            / Cast(F("num_your_messages"), FloatField()),
+        ),
+        default=0,
+        output_field=FloatField(),
+    )
+    other_members = ArrayAgg(
+        "members",
+        filter=~Q(members__id=user.id),
+        distinct=True,
+    )
+    your_chattiest_rooms = (
+        Room.objects.annotate(num_members=num_members)
+        .annotate(num_messages=num_messages)
+        .annotate(num_your_messages=num_your_messages)
+        .annotate(num_not_your_messages=num_not_your_messages)
+        .annotate(num_not_your_messages=num_not_your_messages)
+        .annotate(chattiness_score=chattiness_score)
+        .annotate(other_members=other_members)
+        .filter(members=user, num_members=FULL_ROOM_NUM_MEMBERS)
+        .order_by("-chattiness_score")
+        .values("other_members")
+    )
+    if exclude_room_ids:
+        your_chattiest_rooms = your_chattiest_rooms.exclude(id__in=exclude_room_ids)
+    members = [room["other_members"][0] for room in your_chattiest_rooms[:5]]
+    return User.objects.filter(id__in=members)
+
+
+def get_most_chatted_users_of_most_chatted_users(user):
+    top_most_chatted_users = get_most_chatted_users(user)
+    exclude_room_ids = user.room_set.all().values("id")
+    users = None
+    for top_user in top_most_chatted_users:
+        top_user_most_chatted_users = get_most_chatted_users(
+            top_user, exclude_room_ids=exclude_room_ids
+        )
+        if not users:
+            users = top_user_most_chatted_users
+        else:
+            users.union(top_user_most_chatted_users)
+    return users
 
 
 def get_waiting_rooms():
@@ -81,6 +148,7 @@ def get_waiting_rooms():
 def find_waiting_room(user):
     waiting_rooms = get_waiting_rooms()
     user_rooms_members = User.objects.filter(room__in=user.room_set.all()).distinct()
+    get_top_most_chatted_of_top_most_chatted_users(user)
     other_users_waiting_rooms = waiting_rooms.exclude(
         members__in=user_rooms_members
     ).order_by("-created_at")
