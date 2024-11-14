@@ -148,15 +148,23 @@ def get_waiting_rooms():
 def find_waiting_room(user):
     waiting_rooms = get_waiting_rooms()
     user_rooms_members = User.objects.filter(room__in=user.room_set.all()).distinct()
-    get_top_most_chatted_of_top_most_chatted_users(user)
     other_users_waiting_rooms = waiting_rooms.exclude(
         members__in=user_rooms_members
     ).order_by("-created_at")
     your_own_waiting_rooms = waiting_rooms.filter(members=user).order_by("-created_at")
-    if other_users_waiting_rooms.exists() and your_own_waiting_rooms.exists():
-        your_waiting_room = your_own_waiting_rooms.first()
+    most_chatted_users = get_most_chatted_users_of_most_chatted_users(user)
+    most_chatted_waiting_rooms = waiting_rooms.filter(
+        members__in=most_chatted_users
+    ).order_by("-created_at")
+    if most_chatted_waiting_rooms.exists() and your_own_waiting_rooms.exists():
+        most_chatted_waiting_room = most_chatted_waiting_rooms.first()
+        your_own_waiting_rooms.delete()
+        return most_chatted_waiting_room
+    elif most_chatted_waiting_rooms.exists():
+        return most_chatted_waiting_rooms.first()
+    elif other_users_waiting_rooms.exists() and your_own_waiting_rooms.exists():
         other_user_waiting_room = other_users_waiting_rooms.first()
-        your_waiting_room.delete()
+        your_own_waiting_rooms.delete()
         return other_user_waiting_room
     elif other_users_waiting_rooms.exists():
         return other_users_waiting_rooms.first()
