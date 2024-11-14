@@ -86,14 +86,16 @@ def get_most_chatted_users(user, exclude_room_ids=None):
             GreaterThan(F("num_your_messages"), 0)
             & GreaterThan(F("num_not_your_messages"), 0)
             & GreaterThanOrEqual(F("num_your_messages"), F("num_not_your_messages")),
-            then=Cast(F("num_your_messages"), FloatField())
+            then=Cast(F("num_messages"), FloatField())
+            * Cast(F("num_your_messages"), FloatField())
             / Cast(F("num_not_your_messages"), FloatField()),
         ),
         When(
             GreaterThan(F("num_your_messages"), 0)
             & GreaterThan(F("num_not_your_messages"), 0)
             & GreaterThanOrEqual(F("num_not_your_messages"), F("num_your_messages")),
-            then=Cast(F("num_not_your_messages"), FloatField())
+            then=Cast(F("num_messages"), FloatField())
+            * Cast(F("num_not_your_messages"), FloatField())
             / Cast(F("num_your_messages"), FloatField()),
         ),
         default=0,
