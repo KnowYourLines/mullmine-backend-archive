@@ -125,7 +125,7 @@ def get_most_chatted_users(user, exclude_room_ids=None):
 def get_most_chatted_users_of_most_chatted_users(user):
     top_most_chatted_users = get_most_chatted_users(user)
     exclude_room_ids = user.room_set.all().values("id")
-    users = None
+    users = User.objects.none()
     for top_user in top_most_chatted_users:
         top_user_most_chatted_users = get_most_chatted_users(
             top_user, exclude_room_ids=exclude_room_ids
