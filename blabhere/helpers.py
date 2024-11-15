@@ -101,8 +101,8 @@ def get_most_chatted_users(user, exclude_room_ids=None):
         default=0,
         output_field=FloatField(),
     )
-    other_members = ArrayAgg(
-        "members",
+    other_members_ids = ArrayAgg(
+        "members__id",
         filter=~Q(members__id=user.id),
         distinct=True,
     )
@@ -113,15 +113,15 @@ def get_most_chatted_users(user, exclude_room_ids=None):
         .annotate(num_not_your_messages=num_not_your_messages)
         .annotate(num_not_your_messages=num_not_your_messages)
         .annotate(chattiness_score=chattiness_score)
-        .annotate(other_members=other_members)
+        .annotate(other_members_ids=other_members_ids)
         .filter(members=user, num_members=FULL_ROOM_NUM_MEMBERS)
         .order_by("-chattiness_score")
-        .values("other_members")
+        .values("other_members_ids")
     )
     if exclude_room_ids:
         your_chattiest_rooms = your_chattiest_rooms.exclude(id__in=exclude_room_ids)
-    members = [room["other_members"][0] for room in your_chattiest_rooms[:5]]
-    return User.objects.filter(id__in=members)
+    members_ids = [room["other_members_ids"][0] for room in your_chattiest_rooms[:5]]
+    return User.objects.filter(id__in=members_ids)
 
 
 def get_most_chatted_users_of_most_chatted_users(user):
