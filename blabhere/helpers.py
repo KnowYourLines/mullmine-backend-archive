@@ -17,6 +17,13 @@ def get_user_topics(username):
     return [topic.name for topic in user.chat_topics.all()]
 
 
+def remove_topic(user, topic):
+    topic = ChatTopic.objects.filter(name=topic)
+    if topic.exists():
+        user.chat_topics.remove(topic.first())
+        return True
+
+
 def save_topic(user, topic):
     new_topic, created = ChatTopic.objects.get_or_create(name=topic)
     user.chat_topics.add(new_topic)

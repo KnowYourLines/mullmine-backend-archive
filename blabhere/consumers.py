@@ -23,6 +23,7 @@ from blabhere.helpers import (
     check_room_full,
     save_topic,
     get_user_topics,
+    remove_topic,
 )
 
 logger = logging.getLogger(__name__)
@@ -137,6 +138,13 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
             if created:
                 await self.fetch_chat_topics()
 
+    async def remove_topic(self, input_payload):
+        topic = input_payload.get("topic", "")
+        if len(topic.strip()) > 0:
+            removed = await database_sync_to_async(remove_topic)(self.user, topic)
+            if removed:
+                await self.fetch_chat_topics()
+
     async def receive_json(self, content, **kwargs):
         if self.username == self.user.username:
             if content.get("command") == "exit_room":
@@ -145,6 +153,8 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
                 asyncio.create_task(self.update_display_name(content))
             if content.get("command") == "add_topic":
                 asyncio.create_task(self.add_topic(content))
+            if content.get("command") == "remove_topic":
+                asyncio.create_task(self.remove_topic(content))
 
     async def display_name_taken(self, event):
         # Send message to WebSocket
