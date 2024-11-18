@@ -7,9 +7,20 @@ from django.db.models import F, Count, Q, Case, When, FloatField
 from django.db.models.functions import Cast
 from django.db.models.lookups import GreaterThan, GreaterThanOrEqual
 
-from blabhere.models import Room, Message, User, Conversation
+from blabhere.models import Room, Message, User, Conversation, ChatTopic
 
 FULL_ROOM_NUM_MEMBERS = 2
+
+
+def get_user_topics(username):
+    user = User.objects.get(username=username)
+    return [topic.name for topic in user.chat_topics.all()]
+
+
+def save_topic(user, topic):
+    new_topic, created = ChatTopic.objects.get_or_create(name=topic)
+    user.chat_topics.add(new_topic)
+    return created
 
 
 def leave_room(user, room_id):

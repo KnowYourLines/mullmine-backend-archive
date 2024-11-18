@@ -8,6 +8,11 @@ class User(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     display_name = models.CharField(max_length=150, unique=True)
     is_verified = models.BooleanField(default=False)
+    chat_topics = models.ManyToManyField("ChatTopic", related_name="users")
+
+
+class ChatTopic(models.Model):
+    name = models.CharField(max_length=255, unique=True)
 
 
 class Room(models.Model):

@@ -21,6 +21,8 @@ from blabhere.helpers import (
     read_unread_conversation,
     leave_room,
     check_room_full,
+    save_topic,
+    get_user_topics,
 )
 
 logger = logging.getLogger(__name__)
@@ -48,6 +50,13 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
             {"type": "conversations", "conversations": conversations},
         )
 
+    async def fetch_chat_topics(self):
+        topics = await database_sync_to_async(get_user_topics)(self.user.username)
+        await self.channel_layer.send(
+            self.channel_name,
+            {"type": "topics", "topics": topics},
+        )
+
     async def exit_room(self, input_payload):
         usernames = await database_sync_to_async(get_all_member_usernames)(
             input_payload["room_id"]
@@ -71,6 +80,7 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
             await self.accept()
             await self.fetch_conversations()
             await self.fetch_display_name()
+            await self.fetch_chat_topics()
         else:
             await self.close()
 
@@ -120,12 +130,21 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
                     },
                 )
 
+    async def add_topic(self, input_payload):
+        new_topic = input_payload.get("topic", "")
+        if len(new_topic.strip()) > 0:
+            created = await database_sync_to_async(save_topic)(self.user, new_topic)
+            if created:
+                await self.fetch_chat_topics()
+
     async def receive_json(self, content, **kwargs):
         if self.username == self.user.username:
             if content.get("command") == "exit_room":
                 asyncio.create_task(self.exit_room(content))
             if content.get("command") == "update_display_name":
                 asyncio.create_task(self.update_display_name(content))
+            if content.get("command") == "add_topic":
+                asyncio.create_task(self.add_topic(content))
 
     async def display_name_taken(self, event):
         # Send message to WebSocket
@@ -136,6 +155,10 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
         await self.send_json(event)
 
     async def conversations(self, event):
+        # Send message to WebSocket
+        await self.send_json(event)
+
+    async def topics(self, event):
         # Send message to WebSocket
         await self.send_json(event)
 
