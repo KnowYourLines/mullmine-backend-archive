@@ -18,16 +18,21 @@ def get_user_topics(username):
 
 
 def remove_topic(user, topic):
+    removed = False
     topic = ChatTopic.objects.filter(name=topic)
     if topic.exists():
         user.chat_topics.remove(topic.first())
-        return True
+        removed = True
+    return removed
 
 
 def save_topic(user, topic):
+    added = False
     new_topic, created = ChatTopic.objects.get_or_create(name=topic)
-    user.chat_topics.add(new_topic)
-    return created
+    if not user.chat_topics.filter(id=new_topic.id).exists():
+        user.chat_topics.add(new_topic)
+        added = True
+    return added
 
 
 def leave_room(user, room_id):
@@ -165,6 +170,19 @@ def get_waiting_rooms():
     return waiting_rooms
 
 
+def get_same_topics_users(user):
+    topics_ids = user.chat_topics.all().values_list("id", flat=True)
+    user_rooms_members_ids = (
+        User.objects.filter(room__in=user.room_set.all())
+        .values_list("id", flat=True)
+        .distinct()
+    )
+    users = User.objects.filter(chat_topics__id__in=topics_ids).exclude(
+        id__in=user_rooms_members_ids,
+    )
+    return users
+
+
 def find_waiting_room(user):
     waiting_rooms = get_waiting_rooms()
     user_rooms_members = User.objects.filter(room__in=user.room_set.all()).distinct()
@@ -176,12 +194,22 @@ def find_waiting_room(user):
     most_chatted_waiting_rooms = waiting_rooms.filter(
         members__in=most_chatted_users
     ).order_by("-created_at")
+    same_topics_users = get_same_topics_users(user)
+    same_topics_waiting_rooms = waiting_rooms.filter(
+        members__in=same_topics_users
+    ).order_by("-created_at")
     if most_chatted_waiting_rooms.exists() and your_own_waiting_rooms.exists():
         most_chatted_waiting_room = most_chatted_waiting_rooms.first()
         your_own_waiting_rooms.delete()
         return most_chatted_waiting_room
     elif most_chatted_waiting_rooms.exists():
         return most_chatted_waiting_rooms.first()
+    elif same_topics_waiting_rooms.exists() and your_own_waiting_rooms.exists():
+        same_topics_waiting_room = same_topics_waiting_rooms.first()
+        your_own_waiting_rooms.delete()
+        return same_topics_waiting_room
+    elif same_topics_waiting_rooms.exists():
+        return same_topics_waiting_rooms.first()
     elif other_users_waiting_rooms.exists() and your_own_waiting_rooms.exists():
         other_user_waiting_room = other_users_waiting_rooms.first()
         your_own_waiting_rooms.delete()
