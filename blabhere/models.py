@@ -9,6 +9,7 @@ class User(AbstractUser):
     display_name = models.CharField(max_length=150, unique=True)
     is_verified = models.BooleanField(default=False)
     chat_topics = models.ManyToManyField("ChatTopic", related_name="users")
+    agreed_terms_and_privacy = models.BooleanField(default=False)
 
 
 class ChatTopic(models.Model):

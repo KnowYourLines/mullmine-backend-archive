@@ -12,6 +12,15 @@ from blabhere.models import Room, Message, User, Conversation, ChatTopic
 FULL_ROOM_NUM_MEMBERS = 2
 
 
+def get_user_agreed_terms(username):
+    user = User.objects.get(username=username)
+    return user.agreed_terms_and_privacy
+
+
+def agree_terms(username):
+    User.objects.filter(username=username).update(agreed_terms_and_privacy=True)
+
+
 def get_user_topics(username):
     user = User.objects.get(username=username)
     return [topic.name for topic in user.chat_topics.all()]

@@ -24,6 +24,8 @@ from blabhere.helpers import (
     save_topic,
     get_user_topics,
     remove_topic,
+    get_user_agreed_terms,
+    agree_terms,
 )
 
 logger = logging.getLogger(__name__)
@@ -58,6 +60,15 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
             {"type": "topics", "topics": topics},
         )
 
+    async def fetch_agreed_terms_and_privacy(self):
+        agreed_terms = await database_sync_to_async(get_user_agreed_terms)(
+            self.user.username
+        )
+        await self.channel_layer.send(
+            self.channel_name,
+            {"type": "agreed_terms", "agreed_terms": agreed_terms},
+        )
+
     async def exit_room(self, input_payload):
         usernames = await database_sync_to_async(get_all_member_usernames)(
             input_payload["room_id"]
@@ -82,6 +93,7 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
             await self.fetch_conversations()
             await self.fetch_display_name()
             await self.fetch_chat_topics()
+            await self.fetch_agreed_terms_and_privacy()
         else:
             await self.close()
 
@@ -138,6 +150,10 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
             if created:
                 await self.fetch_chat_topics()
 
+    async def agree_terms(self):
+        await database_sync_to_async(agree_terms)(self.user.username)
+        await self.fetch_agreed_terms_and_privacy()
+
     async def remove_topic(self, input_payload):
         topic = input_payload.get("topic", "")
         if len(topic.strip()) > 0:
@@ -155,6 +171,8 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
                 asyncio.create_task(self.add_topic(content))
             if content.get("command") == "remove_topic":
                 asyncio.create_task(self.remove_topic(content))
+            if content.get("command") == "agree_terms":
+                asyncio.create_task(self.agree_terms())
 
     async def display_name_taken(self, event):
         # Send message to WebSocket
@@ -165,6 +183,10 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
         await self.send_json(event)
 
     async def conversations(self, event):
+        # Send message to WebSocket
+        await self.send_json(event)
+
+    async def agreed_terms(self, event):
         # Send message to WebSocket
         await self.send_json(event)
 
