@@ -28,6 +28,7 @@ from blabhere.helpers import (
     agree_terms,
     block_other_user,
     report_other_user,
+    delete_user,
 )
 
 logger = logging.getLogger(__name__)
@@ -163,6 +164,9 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
             if removed:
                 await self.fetch_chat_topics()
 
+    async def delete_account(self):
+        await database_sync_to_async(delete_user)(self.user)
+
     async def receive_json(self, content, **kwargs):
         if self.username == self.user.username:
             if content.get("command") == "exit_room":
@@ -175,6 +179,8 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
                 asyncio.create_task(self.remove_topic(content))
             if content.get("command") == "agree_terms":
                 asyncio.create_task(self.agree_terms())
+            if content.get("command") == "delete_account":
+                asyncio.create_task(self.delete_account())
 
     async def display_name_taken(self, event):
         # Send message to WebSocket

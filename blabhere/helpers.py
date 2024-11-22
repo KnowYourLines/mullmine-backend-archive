@@ -6,10 +6,16 @@ from django.db import IntegrityError
 from django.db.models import F, Count, Q, Case, When, FloatField
 from django.db.models.functions import Cast
 from django.db.models.lookups import GreaterThan, GreaterThanOrEqual
+from firebase_admin.auth import delete_user as delete_firebase_user
 
 from blabhere.models import Room, Message, User, Conversation, ChatTopic
 
 FULL_ROOM_NUM_MEMBERS = 2
+
+
+def delete_user(user):
+    delete_firebase_user(user.username)
+    user.delete()
 
 
 def block_other_user(room_id, user):
