@@ -200,6 +200,10 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
         # Send message to WebSocket
         await self.fetch_conversations()
 
+    async def blocked_user(self, event):
+        # Send message to WebSocket
+        await self.receive_json(event)
+
 
 class RoomConsumer(AsyncJsonWebsocketConsumer):
     def __init__(self, *args, **kwargs):
@@ -301,6 +305,14 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
 
     async def block_other_user(self):
         await database_sync_to_async(block_other_user)(self.room_id, self.user)
+        await self.channel_layer.group_send(
+            self.user.username,
+            {
+                "type": "blocked_user",
+                "command": "exit_room",
+                "room_id": str(self.room_id),
+            },
+        )
 
     async def report_other_user(self):
         await database_sync_to_async(report_other_user)(self.room_id, self.user)

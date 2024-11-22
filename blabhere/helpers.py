@@ -201,10 +201,14 @@ def get_most_chatted_users_of_most_chatted_users(user):
     return users
 
 
-def get_waiting_rooms():
+def get_waiting_rooms(user):
+    blocked_users_ids = user.blocked_users.all().values_list("id", flat=True)
     num_members = Count("members", distinct=True)
     waiting_rooms = (
-        Room.objects.all().annotate(num_members=num_members).filter(num_members=1)
+        Room.objects.all()
+        .annotate(num_members=num_members)
+        .filter(num_members=1)
+        .exclude(members__id__in=blocked_users_ids)
     )
     return waiting_rooms
 
@@ -223,7 +227,7 @@ def get_same_topics_users(user):
 
 
 def find_waiting_room(user):
-    waiting_rooms = get_waiting_rooms()
+    waiting_rooms = get_waiting_rooms(user)
     user_rooms_members = User.objects.filter(room__in=user.room_set.all()).distinct()
     other_users_waiting_rooms = waiting_rooms.exclude(
         members__in=user_rooms_members
