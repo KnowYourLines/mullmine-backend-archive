@@ -26,6 +26,8 @@ from blabhere.helpers import (
     remove_topic,
     get_user_agreed_terms,
     agree_terms,
+    block_other_user,
+    report_other_user,
 )
 
 logger = logging.getLogger(__name__)
@@ -297,6 +299,12 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
                 {"type": "new_message", "new_message": new_message},
             )
 
+    async def block_other_user(self):
+        await database_sync_to_async(block_other_user)(self.room_id, self.user)
+
+    async def report_other_user(self):
+        await database_sync_to_async(report_other_user)(self.room_id, self.user)
+
     async def receive_json(self, content, **kwargs):
         if content.get("command") == "connect":
             if self.room_id:
@@ -308,6 +316,10 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             asyncio.create_task(self.send_message(content))
         if content.get("command") == "fetch_prev_messages":
             asyncio.create_task(self.fetch_prev_messages(content))
+        if content.get("command") == "block_other_user":
+            asyncio.create_task(self.block_other_user())
+        if content.get("command") == "report_other_user":
+            asyncio.create_task(self.report_other_user())
 
     async def room(self, event):
         # Send message to WebSocket

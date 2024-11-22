@@ -10,6 +10,10 @@ class User(AbstractUser):
     is_verified = models.BooleanField(default=False)
     chat_topics = models.ManyToManyField("ChatTopic", related_name="users")
     agreed_terms_and_privacy = models.BooleanField(default=False)
+    blocked_users = models.ManyToManyField("self", related_name="blocked_by")
+    reported_users = models.ManyToManyField(
+        "self", related_name="reported_by", symmetrical=False
+    )
 
 
 class ChatTopic(models.Model):

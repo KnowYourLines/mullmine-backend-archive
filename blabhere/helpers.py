@@ -12,6 +12,36 @@ from blabhere.models import Room, Message, User, Conversation, ChatTopic
 FULL_ROOM_NUM_MEMBERS = 2
 
 
+def block_other_user(room_id, user):
+    other_member = (
+        Room.objects.filter(id=room_id)
+        .annotate(
+            other_member=ArrayAgg(
+                "members",
+                filter=~Q(members__id=user.id),
+                distinct=True,
+            )
+        )[0]
+        .other_member[0]
+    )
+    user.blocked_users.add(other_member)
+
+
+def report_other_user(room_id, user):
+    other_member = (
+        Room.objects.filter(id=room_id)
+        .annotate(
+            other_member=ArrayAgg(
+                "members",
+                filter=~Q(members__id=user.id),
+                distinct=True,
+            )
+        )[0]
+        .other_member[0]
+    )
+    user.reported_users.add(other_member)
+
+
 def get_user_agreed_terms(username):
     user = User.objects.get(username=username)
     return user.agreed_terms_and_privacy
