@@ -1,6 +1,7 @@
 import uuid
 
 from django.contrib.auth.models import AbstractUser
+from django.contrib.postgres.fields import ArrayField
 from django.db import models
 
 
@@ -14,6 +15,20 @@ class User(AbstractUser):
     reported_users = models.ManyToManyField(
         "self", related_name="reported_by", symmetrical=False
     )
+
+
+class ReportedChat(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    messages = ArrayField(models.TextField())
+    reporter = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="reporter_chats"
+    )
+    reported = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="reported_chats"
+    )
+
+    def __str__(self):
+        return f"{self.reported} reported by {self.reporter}"
 
 
 class ChatTopic(models.Model):

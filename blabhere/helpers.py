@@ -8,7 +8,7 @@ from django.db.models.functions import Cast
 from django.db.models.lookups import GreaterThan, GreaterThanOrEqual
 from firebase_admin.auth import delete_user as delete_firebase_user
 
-from blabhere.models import Room, Message, User, Conversation, ChatTopic
+from blabhere.models import Room, Message, User, Conversation, ChatTopic, ReportedChat
 
 FULL_ROOM_NUM_MEMBERS = 2
 
@@ -33,19 +33,27 @@ def block_other_user(room_id, user):
     user.blocked_users.add(other_member)
 
 
-def report_other_user(room_id, user):
-    other_member = (
-        Room.objects.filter(id=room_id)
-        .annotate(
-            other_member=ArrayAgg(
-                "members",
-                filter=~Q(members__id=user.id),
-                distinct=True,
-            )
-        )[0]
-        .other_member[0]
+def log_reported_chat(room, reporter, reported_user_id):
+    messages = list(
+        room.message_set.all().values_list("content", flat=True).order_by("created_at")
     )
+    reported = User.objects.get(id=reported_user_id)
+    ReportedChat.objects.update_or_create(
+        reporter=reporter, reported=reported, defaults={"messages": messages}
+    )
+
+
+def report_other_user(room_id, user):
+    room = Room.objects.filter(id=room_id)
+    other_member = room.annotate(
+        other_member=ArrayAgg(
+            "members",
+            filter=~Q(members__id=user.id),
+            distinct=True,
+        )
+    )[0].other_member[0]
     user.reported_users.add(other_member)
+    log_reported_chat(room.first(), user, other_member)
 
 
 def get_user_agreed_terms(username):
