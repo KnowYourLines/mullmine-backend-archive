@@ -13,6 +13,12 @@ from blabhere.models import Room, Message, User, Conversation, ChatTopic, Report
 FULL_ROOM_NUM_MEMBERS = 2
 
 
+def chat_partner_is_online(room_id, user):
+    room = Room.objects.filter(id=room_id).first()
+    other_member = room.members.exclude(id=user.id).first()
+    return other_member.is_online
+
+
 def get_all_room_ids(user):
     room_ids = list(user.room_set.all().values_list("id", flat=True))
     return room_ids
