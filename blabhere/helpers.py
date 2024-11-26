@@ -239,9 +239,13 @@ def get_most_chatted_users_of_most_chatted_users(user):
 def get_waiting_rooms(user):
     blocked_users_ids = user.blocked_users.all().values_list("id", flat=True)
     num_members = Count("members", distinct=True)
+    num_members_online = Count(
+        "members", filter=Q(members__is_online=True), distinct=True
+    )
     waiting_rooms = (
         Room.objects.all()
         .annotate(num_members=num_members)
+        .annotate(num_members_online=num_members_online)
         .filter(num_members=1)
         .exclude(members__id__in=blocked_users_ids)
     )
@@ -266,16 +270,16 @@ def find_waiting_room(user):
     user_rooms_members = User.objects.filter(room__in=user.room_set.all()).distinct()
     other_users_waiting_rooms = waiting_rooms.exclude(
         members__in=user_rooms_members
-    ).order_by("-created_at")
+    ).order_by("-created_at", "-num_members_online")
     your_own_waiting_rooms = waiting_rooms.filter(members=user).order_by("-created_at")
     most_chatted_users = get_most_chatted_users_of_most_chatted_users(user)
     most_chatted_waiting_rooms = waiting_rooms.filter(
         members__in=most_chatted_users
-    ).order_by("-created_at")
+    ).order_by("-created_at", "-num_members_online")
     same_topics_users = get_same_topics_users(user)
     same_topics_waiting_rooms = waiting_rooms.filter(
         members__in=same_topics_users
-    ).order_by("-created_at")
+    ).order_by("-created_at", "-num_members_online")
     if most_chatted_waiting_rooms.exists() and your_own_waiting_rooms.exists():
         most_chatted_waiting_room = most_chatted_waiting_rooms.first()
         your_own_waiting_rooms.delete()
