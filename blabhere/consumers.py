@@ -32,7 +32,6 @@ from blabhere.helpers import (
     set_offline,
     set_online,
     get_all_room_ids,
-    chat_partner_is_online,
 )
 
 logger = logging.getLogger(__name__)
@@ -299,15 +298,6 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             },
         )
 
-    async def fetch_chat_partner_is_online(self, room):
-        is_online = await database_sync_to_async(chat_partner_is_online)(
-            room.id, self.user
-        )
-        await self.channel_layer.send(
-            self.channel_name,
-            {"type": "chat_partner_online", "chat_partner_online": is_online},
-        )
-
     async def initialize_room(self, input_payload):
         room_id = input_payload.get("room")
         is_room_full = await database_sync_to_async(check_room_full)(room_id, self.user)
@@ -318,7 +308,6 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
                 await self.channel_layer.group_add(self.room_id, self.channel_name)
                 await self.fetch_member_display_names(room)
                 await self.fetch_initial_messages(room)
-                await self.fetch_chat_partner_is_online(room)
                 await self.read_conversation()
                 await self.channel_layer.send(
                     self.channel_name, {"type": "room", "room": str(room.id)}
@@ -393,10 +382,6 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         await self.channel_layer.group_discard(str(self.room_id), self.channel_name)
 
     async def members(self, event):
-        # Send message to WebSocket
-        await self.send_json(event)
-
-    async def chat_partner_online(self, event):
         # Send message to WebSocket
         await self.send_json(event)
 
