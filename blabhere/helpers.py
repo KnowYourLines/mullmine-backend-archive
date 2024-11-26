@@ -13,6 +13,19 @@ from blabhere.models import Room, Message, User, Conversation, ChatTopic, Report
 FULL_ROOM_NUM_MEMBERS = 2
 
 
+def get_all_room_ids(user):
+    room_ids = list(user.room_set.all().values_list("id", flat=True))
+    return room_ids
+
+
+def set_online(username):
+    User.objects.filter(username=username).update(is_online=True)
+
+
+def set_offline(username):
+    User.objects.filter(username=username).update(is_online=False)
+
+
 def delete_user(user):
     delete_firebase_user(user.username)
     user.delete()
@@ -111,6 +124,13 @@ def get_user_conversations(username):
                 distinct=True,
             )
         )
+        .annotate(
+            is_online=ArrayAgg(
+                "room__members__is_online",
+                filter=~Q(room__members__display_name=user.display_name),
+                distinct=True,
+            )
+        )
         .values(
             "room__id",
             "read",
@@ -118,6 +138,7 @@ def get_user_conversations(username):
             "latest_message__content",
             "latest_message__created_at",
             "other_members",
+            "is_online",
             "created_at",
         )
         .order_by(

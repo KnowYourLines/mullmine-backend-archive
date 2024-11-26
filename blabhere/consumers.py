@@ -29,6 +29,9 @@ from blabhere.helpers import (
     block_other_user,
     report_other_user,
     delete_user,
+    set_offline,
+    set_online,
+    get_all_room_ids,
 )
 
 logger = logging.getLogger(__name__)
@@ -87,12 +90,27 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
             {"type": "user_left_room"},
         )
 
+    async def refresh_all_chat_partner_conversations(self):
+        your_room_ids = await database_sync_to_async(get_all_room_ids)(self.user)
+        for room_id in your_room_ids:
+            usernames = await database_sync_to_async(get_all_member_usernames)(room_id)
+            for username in usernames:
+                await self.channel_layer.group_send(
+                    username,
+                    {"type": "refresh_conversations"},
+                )
+
+    async def go_online(self):
+        await self.refresh_all_chat_partner_conversations()
+        await database_sync_to_async(set_online)(self.username)
+
     async def connect(self):
         self.username = str(self.scope["url_route"]["kwargs"]["user_id"])
         self.user = self.scope["user"]
         if self.username == self.user.username:
             await self.channel_layer.group_add(self.username, self.channel_name)
             await self.accept()
+            await self.go_online()
             await self.fetch_conversations()
             await self.fetch_display_name()
             await self.fetch_chat_topics()
@@ -101,7 +119,18 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
             await self.close()
 
     async def disconnect(self, close_code):
+        await self.go_offline()
         await self.channel_layer.group_discard(self.username, self.channel_name)
+
+    async def go_offline(self):
+        await database_sync_to_async(set_offline)(self.username)
+        await self.refresh_all_chat_partner_conversations()
+        await self.channel_layer.group_send(
+            self.username,
+            {
+                "type": "remain_online",
+            },
+        )
 
     async def update_display_name(self, input_payload):
         new_display_name = input_payload.get("new_display_name", "")
@@ -197,6 +226,10 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
     async def agreed_terms(self, event):
         # Send message to WebSocket
         await self.send_json(event)
+
+    async def remain_online(self, event):
+        await database_sync_to_async(set_online)(self.username)
+        await self.refresh_all_chat_partner_conversations()
 
     async def topics(self, event):
         # Send message to WebSocket

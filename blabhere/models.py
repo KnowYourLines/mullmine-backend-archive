@@ -15,6 +15,7 @@ class User(AbstractUser):
     reported_users = models.ManyToManyField(
         "self", related_name="reported_by", symmetrical=False
     )
+    is_online = models.BooleanField(default=False)
 
 
 class ReportedChat(models.Model):
