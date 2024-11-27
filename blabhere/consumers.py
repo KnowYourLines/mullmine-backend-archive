@@ -32,6 +32,7 @@ from blabhere.helpers import (
     set_offline,
     set_online,
     get_all_room_ids,
+    chat_partner_is_online,
 )
 
 logger = logging.getLogger(__name__)
@@ -93,6 +94,10 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
     async def refresh_all_chat_partner_conversations(self):
         your_room_ids = await database_sync_to_async(get_all_room_ids)(self.user)
         for room_id in your_room_ids:
+            await self.channel_layer.group_send(
+                str(room_id),
+                {"type": "refresh_chat_partner_online"},
+            )
             usernames = await database_sync_to_async(get_all_member_usernames)(room_id)
             for username in usernames:
                 await self.channel_layer.group_send(
@@ -101,8 +106,8 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
                 )
 
     async def go_online(self):
-        await self.refresh_all_chat_partner_conversations()
         await database_sync_to_async(set_online)(self.username)
+        await self.refresh_all_chat_partner_conversations()
 
     async def connect(self):
         self.username = str(self.scope["url_route"]["kwargs"]["user_id"])
@@ -258,6 +263,15 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(str(self.room_id), self.channel_name)
 
+    async def fetch_chat_partner_is_online(self):
+        is_online = await database_sync_to_async(chat_partner_is_online)(
+            self.room_id, self.user
+        )
+        await self.channel_layer.send(
+            self.channel_name,
+            {"type": "chat_partner_online", "chat_partner_online": is_online},
+        )
+
     async def fetch_member_display_names(self, room):
         member_display_names, was_added = await database_sync_to_async(
             add_user_to_room
@@ -309,6 +323,7 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
                 await self.fetch_member_display_names(room)
                 await self.fetch_initial_messages(room)
                 await self.read_conversation()
+                await self.fetch_chat_partner_is_online()
                 await self.channel_layer.send(
                     self.channel_name, {"type": "room", "room": str(room.id)}
                 )
@@ -373,6 +388,13 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             asyncio.create_task(self.report_other_user())
 
     async def room(self, event):
+        # Send message to WebSocket
+        await self.send_json(event)
+
+    async def refresh_chat_partner_online(self, event):
+        await self.fetch_chat_partner_is_online()
+
+    async def chat_partner_online(self, event):
         # Send message to WebSocket
         await self.send_json(event)
 
