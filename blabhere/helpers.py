@@ -10,7 +10,7 @@ from firebase_admin.auth import delete_user as delete_firebase_user
 
 from blabhere.models import Room, Message, User, Conversation, ChatTopic, ReportedChat
 
-FULL_ROOM_NUM_MEMBERS = 2
+FULL_ROOM_NUM_MEMBERS = 10
 
 
 def chat_partner_is_online(room_id, user):
@@ -188,19 +188,10 @@ def get_most_chatted_users(user, exclude_room_ids=None):
     chattiness_score = Case(
         When(
             GreaterThan(F("num_your_messages"), 0)
-            & GreaterThan(F("num_not_your_messages"), 0)
-            & GreaterThanOrEqual(F("num_your_messages"), F("num_not_your_messages")),
+            & GreaterThan(F("num_not_your_messages"), 0),
             then=Cast(F("num_messages"), FloatField())
             * Cast(F("num_your_messages"), FloatField())
             / Cast(F("num_not_your_messages"), FloatField()),
-        ),
-        When(
-            GreaterThan(F("num_your_messages"), 0)
-            & GreaterThan(F("num_not_your_messages"), 0)
-            & GreaterThanOrEqual(F("num_not_your_messages"), F("num_your_messages")),
-            then=Cast(F("num_messages"), FloatField())
-            * Cast(F("num_not_your_messages"), FloatField())
-            / Cast(F("num_your_messages"), FloatField()),
         ),
         default=0,
         output_field=FloatField(),
@@ -218,13 +209,16 @@ def get_most_chatted_users(user, exclude_room_ids=None):
         .annotate(num_not_your_messages=num_not_your_messages)
         .annotate(chattiness_score=chattiness_score)
         .annotate(other_members_ids=other_members_ids)
-        .filter(members=user, num_members=FULL_ROOM_NUM_MEMBERS)
+        .filter(members=user, num_members__lte=FULL_ROOM_NUM_MEMBERS)
         .order_by("-chattiness_score")
         .values("other_members_ids")
     )
     if exclude_room_ids:
         your_chattiest_rooms = your_chattiest_rooms.exclude(id__in=exclude_room_ids)
-    members_ids = [room["other_members_ids"][0] for room in your_chattiest_rooms[:5]]
+    members_ids = set()
+    for room in your_chattiest_rooms[:5]:
+        for member_id in room["other_members_ids"]:
+            members_ids.add(member_id)
     return User.objects.filter(id__in=members_ids)
 
 
@@ -253,7 +247,7 @@ def get_waiting_rooms(user):
         Room.objects.all()
         .annotate(num_members=num_members)
         .annotate(num_members_online=num_members_online)
-        .filter(num_members=1)
+        .filter(num_members__lt=FULL_ROOM_NUM_MEMBERS)
         .exclude(members__id__in=blocked_users_ids)
     )
     return waiting_rooms
@@ -316,7 +310,7 @@ def initialize_room(room_id, user):
         if room_id:
             try:
                 room = Room.objects.get(id=room_id)
-                if room.members.count() == 2:
+                if 1 < room.members.count() <= FULL_ROOM_NUM_MEMBERS:
                     return room
             except ObjectDoesNotExist:
                 return None
