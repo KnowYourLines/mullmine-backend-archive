@@ -249,7 +249,7 @@ def get_waiting_rooms(user):
         .annotate(num_members_online=num_members_online)
         .filter(num_members__lt=FULL_ROOM_NUM_MEMBERS)
         .exclude(members__id__in=blocked_users_ids)
-        .exclude(members__id=user.id, num_members__gt=1)
+        .exclude(members__id=user.id)
     )
     return waiting_rooms
 
