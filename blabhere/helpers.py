@@ -250,6 +250,7 @@ def get_waiting_rooms(user):
         .filter(num_members__lt=FULL_ROOM_NUM_MEMBERS)
         .exclude(members__id__in=blocked_users_ids)
         .exclude(members__id=user.id, num_members__gt=1)
+        .distinct()
     )
     return waiting_rooms
 
@@ -261,8 +262,12 @@ def get_same_topics_users(user):
         .values_list("id", flat=True)
         .distinct()
     )
-    users = User.objects.filter(chat_topics__id__in=topics_ids).exclude(
-        id__in=user_rooms_members_ids,
+    users = (
+        User.objects.filter(chat_topics__id__in=topics_ids)
+        .exclude(
+            id__in=user_rooms_members_ids,
+        )
+        .distinct()
     )
     return users
 
@@ -270,18 +275,24 @@ def get_same_topics_users(user):
 def find_waiting_room(user):
     waiting_rooms = get_waiting_rooms(user)
     user_rooms_members = User.objects.filter(room__in=user.room_set.all()).distinct()
-    other_users_waiting_rooms = waiting_rooms.exclude(
-        members__in=user_rooms_members
-    ).order_by("-created_at", "-num_members_online")
+    other_users_waiting_rooms = (
+        waiting_rooms.exclude(members__in=user_rooms_members)
+        .distinct()
+        .order_by("-created_at", "-num_members_online")
+    )
     your_own_waiting_rooms = waiting_rooms.filter(members=user).order_by("-created_at")
     most_chatted_users = get_most_chatted_users_of_most_chatted_users(user)
-    most_chatted_waiting_rooms = waiting_rooms.filter(
-        members__in=most_chatted_users
-    ).order_by("-created_at", "-num_members_online")
+    most_chatted_waiting_rooms = (
+        waiting_rooms.filter(members__in=most_chatted_users)
+        .distinct()
+        .order_by("-created_at", "-num_members_online")
+    )
     same_topics_users = get_same_topics_users(user)
-    same_topics_waiting_rooms = waiting_rooms.filter(
-        members__in=same_topics_users
-    ).order_by("-created_at", "-num_members_online")
+    same_topics_waiting_rooms = (
+        waiting_rooms.filter(members__in=same_topics_users)
+        .distinct()
+        .order_by("-created_at", "-num_members_online")
+    )
     if most_chatted_waiting_rooms.exists() and your_own_waiting_rooms.exists():
         most_chatted_waiting_room = most_chatted_waiting_rooms.first()
         your_own_waiting_rooms.delete()
