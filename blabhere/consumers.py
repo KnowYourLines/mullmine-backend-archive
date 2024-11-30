@@ -77,18 +77,14 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
         )
 
     async def exit_room(self, input_payload):
-        usernames = await database_sync_to_async(get_all_member_usernames)(
-            input_payload["room_id"]
-        )
         await database_sync_to_async(leave_room)(self.user, input_payload["room_id"])
-        for username in usernames:
-            await self.channel_layer.group_send(
-                username,
-                {"type": "refresh_conversations"},
-            )
+        await self.channel_layer.group_send(
+            self.user.username,
+            {"type": "refresh_conversations"},
+        )
         await self.channel_layer.group_send(
             input_payload["room_id"],
-            {"type": "user_left_room"},
+            {"type": "refresh_members"},
         )
 
     async def refresh_all_chat_partner_conversations(self):
@@ -272,7 +268,7 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             {"type": "chat_partner_online", "chat_partner_online": is_online},
         )
 
-    async def fetch_member_display_names(self, room):
+    async def add_user_to_room(self, room):
         member_display_names, was_added = await database_sync_to_async(
             add_user_to_room
         )(self.user, room)
@@ -320,7 +316,7 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             if room:
                 self.room_id = str(room.id)
                 await self.channel_layer.group_add(self.room_id, self.channel_name)
-                await self.fetch_member_display_names(room)
+                await self.add_user_to_room(room)
                 await self.fetch_initial_messages(room)
                 await self.read_conversation()
                 await self.fetch_chat_partner_is_online()
@@ -394,14 +390,17 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
     async def refresh_chat_partner_online(self, event):
         await self.fetch_chat_partner_is_online()
 
+    async def refresh_members(self, event):
+        member_display_names = await database_sync_to_async(
+            get_all_member_display_names
+        )(self.room_id)
+        await self.channel_layer.group_send(
+            self.room_id, {"type": "members", "members": member_display_names}
+        )
+
     async def chat_partner_online(self, event):
         # Send message to WebSocket
         await self.send_json(event)
-
-    async def user_left_room(self, event):
-        # Send message to WebSocket
-        await self.send_json(event)
-        await self.channel_layer.group_discard(str(self.room_id), self.channel_name)
 
     async def members(self, event):
         # Send message to WebSocket
