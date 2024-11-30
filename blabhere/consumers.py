@@ -33,6 +33,7 @@ from blabhere.helpers import (
     set_online,
     get_all_room_ids,
     chat_partner_is_online,
+    get_display_name,
 )
 
 logger = logging.getLogger(__name__)
@@ -295,6 +296,12 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             self.channel_name, {"type": "messages", "messages": messages}
         )
 
+    async def fetch_display_name(self, room):
+        display_name = await database_sync_to_async(get_display_name)(room)
+        await self.channel_layer.send(
+            self.channel_name, {"type": "display_name", "display_name": display_name}
+        )
+
     async def fetch_prev_messages(self, input_payload):
         oldest_msg_id = input_payload.get("oldest_message_id", "")
         room = await database_sync_to_async(get_room)(self.room_id)
@@ -322,6 +329,7 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
                 await self.channel_layer.group_add(self.room_id, self.channel_name)
                 await self.add_user_to_room(room)
                 await self.fetch_initial_messages(room)
+                await self.fetch_display_name(room)
                 await self.read_conversation()
                 await self.fetch_chat_partner_is_online()
                 await self.channel_layer.send(
@@ -407,6 +415,10 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         await self.send_json(event)
 
     async def members(self, event):
+        # Send message to WebSocket
+        await self.send_json(event)
+
+    async def display_name(self, event):
         # Send message to WebSocket
         await self.send_json(event)
 

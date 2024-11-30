@@ -15,6 +15,10 @@ from blabhere.models import Room, Message, User, Conversation, ChatTopic, Report
 FULL_ROOM_NUM_MEMBERS = 10
 
 
+def get_display_name(room):
+    return room.display_name
+
+
 def chat_partner_is_online(room_id, user):
     room = Room.objects.filter(id=room_id).first()
     other_member = room.members.exclude(id=user.id).first()
