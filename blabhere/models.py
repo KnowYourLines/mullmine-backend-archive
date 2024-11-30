@@ -41,6 +41,7 @@ class Room(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     members = models.ManyToManyField(User)
     created_at = models.DateTimeField(auto_now_add=True)
+    display_name = models.CharField(max_length=150)
 
 
 class Message(models.Model):

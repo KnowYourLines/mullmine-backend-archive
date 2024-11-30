@@ -77,11 +77,15 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
         )
 
     async def exit_room(self, input_payload):
-        await database_sync_to_async(leave_room)(self.user, input_payload["room_id"])
-        await self.channel_layer.group_send(
-            self.user.username,
-            {"type": "refresh_conversations"},
+        usernames = await database_sync_to_async(get_all_member_usernames)(
+            input_payload["room_id"]
         )
+        await database_sync_to_async(leave_room)(self.user, input_payload["room_id"])
+        for username in usernames:
+            await self.channel_layer.group_send(
+                username,
+                {"type": "refresh_conversations"},
+            )
         await self.channel_layer.group_send(
             input_payload["room_id"],
             {"type": "refresh_members"},

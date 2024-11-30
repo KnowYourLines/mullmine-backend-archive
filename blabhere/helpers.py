@@ -7,6 +7,8 @@ from django.db.models import F, Count, Q, Case, When, FloatField
 from django.db.models.functions import Cast
 from django.db.models.lookups import GreaterThan
 from firebase_admin.auth import delete_user as delete_firebase_user
+from unique_names_generator import get_random_name
+from unique_names_generator.data import ADJECTIVES, COLORS, ANIMALS
 
 from blabhere.models import Room, Message, User, Conversation, ChatTopic, ReportedChat
 
@@ -126,13 +128,6 @@ def get_user_conversations(username):
     user = User.objects.get(username=username)
     conversations = list(
         user.conversation_set.annotate(
-            other_members=ArrayAgg(
-                "room__members__display_name",
-                filter=~Q(room__members__display_name=user.display_name),
-                distinct=True,
-            )
-        )
-        .annotate(
             is_online=ArrayAgg(
                 "room__members__is_online",
                 filter=~Q(room__members__display_name=user.display_name),
@@ -141,11 +136,11 @@ def get_user_conversations(username):
         )
         .values(
             "room__id",
+            "room__display_name",
             "read",
             "latest_message__creator__display_name",
             "latest_message__content",
             "latest_message__created_at",
-            "other_members",
             "is_online",
             "created_at",
         )
@@ -321,7 +316,8 @@ def find_waiting_room(user):
     elif your_own_waiting_rooms.exists():
         return your_own_waiting_rooms.first()
     else:
-        return Room.objects.create()
+        display_name = get_random_name(combo=[COLORS, ADJECTIVES, ANIMALS])
+        return Room.objects.create(display_name=display_name)
 
 
 def initialize_room(room_id, user):
