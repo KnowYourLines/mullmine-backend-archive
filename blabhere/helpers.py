@@ -52,27 +52,20 @@ def block_other_user(room_id, user):
     user.blocked_users.add(other_member)
 
 
-def log_reported_chat(room, reporter, reported_user_id):
-    messages = list(
-        room.message_set.all().values_list("content", flat=True).order_by("created_at")
-    )
-    reported = User.objects.get(id=reported_user_id)
-    ReportedChat.objects.update_or_create(
-        reporter=reporter, reported=reported, defaults={"messages": messages}
+def log_reported_chat(room, reporter, reported_username):
+    reported = User.objects.get(username=reported_username)
+    ReportedChat.objects.get_or_create(
+        reported_room=room, reporter=reporter, reported=reported
     )
 
 
-def report_other_user(room_id, user):
-    room = Room.objects.filter(id=room_id)
-    other_member = room.annotate(
-        other_member=ArrayAgg(
-            "members",
-            filter=~Q(members__id=user.id),
-            distinct=True,
-        )
-    )[0].other_member[0]
-    user.reported_users.add(other_member)
-    log_reported_chat(room.first(), user, other_member)
+def report_room_user(room_id, user, username):
+    room = Room.objects.filter(id=room_id).first()
+    if room:
+        reported_user = room.members.filter(username=username).first()
+        if reported_user and room.members.filter(username=user.username).exists():
+            user.reported_users.add(reported_user)
+            log_reported_chat(room, user, reported_user)
 
 
 def get_user_agreed_terms(username):
@@ -330,9 +323,13 @@ def get_all_members(room_id):
     room = Room.objects.filter(id=room_id)
     if room.exists():
         room = room.first()
-        members = room.members.all().values("display_name", "is_online")
+        members = room.members.all().values("display_name", "is_online", "username")
     return [
-        {"name": member["display_name"], "is_online": member["is_online"]}
+        {
+            "name": member["display_name"],
+            "is_online": member["is_online"],
+            "username": member["username"],
+        }
         for member in members
     ]
 

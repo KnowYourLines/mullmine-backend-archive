@@ -20,7 +20,9 @@ class User(AbstractUser):
 
 class ReportedChat(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    messages = ArrayField(models.TextField())
+    reported_room = models.ForeignKey(
+        "Room", on_delete=models.CASCADE, related_name="reports"
+    )
     reporter = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="reporter_chats"
     )

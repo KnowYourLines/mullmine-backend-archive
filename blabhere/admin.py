@@ -2,7 +2,7 @@ from django.contrib import admin
 from firebase_admin.auth import delete_user, delete_users
 from django.utils.translation import gettext_lazy as _
 
-from blabhere.models import User, ReportedChat
+from blabhere.models import User, ReportedChat, Room
 
 
 class ReportedUserListFilter(admin.SimpleListFilter):
@@ -65,5 +65,18 @@ class ReportedChatModelAdmin(admin.ModelAdmin):
         return False
 
 
+class RoomModelAdmin(admin.ModelAdmin):
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
 admin.site.register(User, UserModelAdmin)
 admin.site.register(ReportedChat, ReportedChatModelAdmin)
+admin.site.register(Room, RoomModelAdmin)
