@@ -37,19 +37,12 @@ def delete_user(user):
     user.delete()
 
 
-def block_other_user(room_id, user):
-    other_member = (
-        Room.objects.filter(id=room_id)
-        .annotate(
-            other_member=ArrayAgg(
-                "members",
-                filter=~Q(members__id=user.id),
-                distinct=True,
-            )
-        )[0]
-        .other_member[0]
-    )
-    user.blocked_users.add(other_member)
+def block_room_user(room_id, user, username):
+    room = Room.objects.filter(id=room_id).first()
+    if room:
+        blocked_user = room.members.filter(username=username).first()
+        if blocked_user and room.members.filter(username=user.username).exists():
+            user.blocked_users.add(blocked_user)
 
 
 def log_reported_chat(room, reporter, reported_username):
@@ -356,7 +349,8 @@ def add_user_to_room(user, room):
     return members, was_added
 
 
-def get_initial_messages(room):
+def get_initial_messages(room, user):
+    blocked_user_ids = user.blocked_users.all().values_list("id", flat=True)
     messages = [
         {
             "creator_username": msg.creator.username,
@@ -365,12 +359,15 @@ def get_initial_messages(room):
             "created_at": msg.created_at.timestamp(),
             "id": str(msg.id),
         }
-        for msg in room.message_set.order_by("-created_at")[:10][::-1]
+        for msg in room.message_set.exclude(creator__id__in=blocked_user_ids).order_by(
+            "-created_at"
+        )[:10][::-1]
     ]
     return messages
 
 
-def get_refreshed_messages(room, oldest_message_timestamp):
+def get_refreshed_messages(room, oldest_message_timestamp, user):
+    blocked_user_ids = user.blocked_users.all().values_list("id", flat=True)
     if oldest_message_timestamp:
         messages = [
             {
@@ -381,8 +378,10 @@ def get_refreshed_messages(room, oldest_message_timestamp):
                 "id": str(msg.id),
             }
             for msg in room.message_set.filter(
-                created_at__gte=oldest_message_timestamp
-            ).order_by("-created_at")[::-1]
+                created_at__gte=oldest_message_timestamp,
+            )
+            .exclude(creator__id__in=blocked_user_ids)
+            .order_by("-created_at")[::-1]
         ]
     else:
         messages = []
@@ -402,15 +401,22 @@ def create_new_message(content, room, creator):
     }
 
 
+def is_blocked_creator(user, username):
+    creator = User.objects.get(username=username)
+    return creator in user.blocked_users.all()
+
+
 def update_conversations_for_new_message(room, message):
     for user in room.members.all():
-        conversation = Conversation.objects.get(participant=user, room=room)
-        Conversation.objects.filter(id=conversation.id).update(
-            latest_message=message, read=user == message.creator
-        )
+        if message.creator not in user.blocked_users.all():
+            conversation = Conversation.objects.get(participant=user, room=room)
+            Conversation.objects.filter(id=conversation.id).update(
+                latest_message=message, read=user == message.creator
+            )
 
 
-def get_prev_messages(oldest_msg_id, room):
+def get_prev_messages(oldest_msg_id, room, user):
+    blocked_user_ids = user.blocked_users.all().values_list("id", flat=True)
     messages = []
     oldest_msg = Message.objects.filter(id=oldest_msg_id, room=room)
     if oldest_msg.exists():
@@ -423,9 +429,9 @@ def get_prev_messages(oldest_msg_id, room):
                 "created_at": msg.created_at.timestamp(),
                 "id": str(msg.id),
             }
-            for msg in room.message_set.filter(
-                created_at__lt=oldest_msg.created_at
-            ).order_by("-created_at")[:10][::-1]
+            for msg in room.message_set.filter(created_at__lt=oldest_msg.created_at)
+            .exclude(creator__id__in=blocked_user_ids)
+            .order_by("-created_at")[:10][::-1]
         ]
     return messages
 

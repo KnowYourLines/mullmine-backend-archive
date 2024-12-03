@@ -26,13 +26,14 @@ from blabhere.helpers import (
     remove_topic,
     get_user_agreed_terms,
     agree_terms,
-    block_other_user,
+    block_room_user,
     report_room_user,
     delete_user,
     set_offline,
     set_online,
     get_all_room_ids,
     get_display_name,
+    is_blocked_creator,
 )
 
 logger = logging.getLogger(__name__)
@@ -236,10 +237,6 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
         # Send message to WebSocket
         await self.fetch_conversations()
 
-    async def blocked_user(self, event):
-        # Send message to WebSocket
-        await self.receive_json(event)
-
 
 class RoomConsumer(AsyncJsonWebsocketConsumer):
     def __init__(self, *args, **kwargs):
@@ -273,7 +270,7 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             )
 
     async def fetch_initial_messages(self, room):
-        messages = await database_sync_to_async(get_initial_messages)(room)
+        messages = await database_sync_to_async(get_initial_messages)(room, self.user)
         await self.channel_layer.send(
             self.channel_name, {"type": "messages", "messages": messages}
         )
@@ -287,7 +284,9 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
     async def fetch_prev_messages(self, input_payload):
         oldest_msg_id = input_payload.get("oldest_message_id", "")
         room = await database_sync_to_async(get_room)(self.room_id)
-        messages = await database_sync_to_async(get_prev_messages)(oldest_msg_id, room)
+        messages = await database_sync_to_async(get_prev_messages)(
+            oldest_msg_id, room, self.user
+        )
         await self.channel_layer.send(
             self.channel_name, {"type": "messages", "messages": messages}
         )
@@ -346,16 +345,12 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
                 {"type": "new_message", "new_message": new_message},
             )
 
-    async def block_other_user(self):
-        await database_sync_to_async(block_other_user)(self.room_id, self.user)
-        await self.channel_layer.group_send(
-            self.user.username,
-            {
-                "type": "blocked_user",
-                "command": "exit_room",
-                "room_id": str(self.room_id),
-            },
-        )
+    async def block_user(self, input_payload):
+        username = input_payload.get("username")
+        if username and username != self.user.username:
+            await database_sync_to_async(block_room_user)(
+                self.room_id, self.user, username
+            )
 
     async def report_user(self, input_payload):
         username = input_payload.get("username")
@@ -375,8 +370,8 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             asyncio.create_task(self.send_message(content))
         if content.get("command") == "fetch_prev_messages":
             asyncio.create_task(self.fetch_prev_messages(content))
-        if content.get("command") == "block_other_user":
-            asyncio.create_task(self.block_other_user())
+        if content.get("command") == "block_user":
+            asyncio.create_task(self.block_user(content))
         if content.get("command") == "report_user":
             asyncio.create_task(self.report_user(content))
 
@@ -403,7 +398,11 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             self.oldest_message_timestamp = datetime.datetime.fromtimestamp(
                 event["new_message"]["created_at"]
             )
-        await self.send_json(event)
+        is_blocked = await database_sync_to_async(is_blocked_creator)(
+            self.user, event["new_message"]["creator_username"]
+        )
+        if not is_blocked:
+            await self.send_json(event)
         await self.read_conversation()
 
     async def messages(self, event):
@@ -421,7 +420,7 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
     async def refreshed_messages(self, event):
         room = await database_sync_to_async(get_room)(self.room_id)
         messages = await database_sync_to_async(get_refreshed_messages)(
-            room, self.oldest_message_timestamp
+            room, self.oldest_message_timestamp, self.user
         )
         event["refreshed_messages"] = messages
         await self.send_json(event)
