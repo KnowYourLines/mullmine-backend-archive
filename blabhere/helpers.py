@@ -262,12 +262,12 @@ def find_waiting_room(user):
     most_chatted_waiting_rooms = (
         waiting_rooms.annotate(num_most_chatted_users=num_most_chatted_users)
         .filter(num_most_chatted_users__gt=0)
-        .order_by("-created_at", "-num_members_online")
+        .order_by("-num_most_chatted_users", "-num_members_online", "-created_at")
     )
     same_topics_waiting_rooms = (
         waiting_rooms.annotate(num_same_topics_users=num_same_topics_users)
         .filter(num_same_topics_users__gt=0)
-        .order_by("-created_at", "-num_members_online")
+        .order_by("-num_same_topics_users", "-num_members_online", "-created_at")
     )
     if most_chatted_waiting_rooms.exists() and your_own_waiting_rooms.exists():
         most_chatted_waiting_room = most_chatted_waiting_rooms.first()
