@@ -359,9 +359,10 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
 
     async def report_user(self, input_payload):
         username = input_payload.get("username")
-        await database_sync_to_async(report_room_user)(
-            self.room_id, self.user, username
-        )
+        if username and username != self.user.username:
+            await database_sync_to_async(report_room_user)(
+                self.room_id, self.user, username
+            )
 
     async def receive_json(self, content, **kwargs):
         if content.get("command") == "connect":
