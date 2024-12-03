@@ -12,7 +12,7 @@ from blabhere.helpers import (
     get_initial_messages,
     create_new_message,
     change_user_display_name,
-    get_all_member_display_names,
+    get_all_members,
     get_user,
     initialize_room,
     get_refreshed_messages,
@@ -32,7 +32,6 @@ from blabhere.helpers import (
     set_offline,
     set_online,
     get_all_room_ids,
-    chat_partner_is_online,
     get_display_name,
 )
 
@@ -92,23 +91,17 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
             {"type": "refresh_members"},
         )
 
-    async def refresh_all_chat_partner_conversations(self):
+    async def refresh_all_member_rooms(self):
         your_room_ids = await database_sync_to_async(get_all_room_ids)(self.user)
         for room_id in your_room_ids:
             await self.channel_layer.group_send(
                 str(room_id),
-                {"type": "refresh_chat_partner_online"},
+                {"type": "refresh_members"},
             )
-            usernames = await database_sync_to_async(get_all_member_usernames)(room_id)
-            for username in usernames:
-                await self.channel_layer.group_send(
-                    username,
-                    {"type": "refresh_conversations"},
-                )
 
     async def go_online(self):
         await database_sync_to_async(set_online)(self.username)
-        await self.refresh_all_chat_partner_conversations()
+        await self.refresh_all_member_rooms()
 
     async def connect(self):
         self.username = str(self.scope["url_route"]["kwargs"]["user_id"])
@@ -130,7 +123,7 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
 
     async def go_offline(self):
         await database_sync_to_async(set_offline)(self.username)
-        await self.refresh_all_chat_partner_conversations()
+        await self.refresh_all_member_rooms()
         await self.channel_layer.group_send(
             self.username,
             {
@@ -153,9 +146,7 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
                         {"type": "refresh_conversations"},
                     )
                 for room_id in rooms_to_refresh:
-                    members = await database_sync_to_async(
-                        get_all_member_display_names
-                    )(room_id)
+                    members = await database_sync_to_async(get_all_members)(room_id)
                     await self.channel_layer.group_send(
                         room_id, {"type": "members", "members": members}
                     )
@@ -235,7 +226,7 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
 
     async def remain_online(self, event):
         await database_sync_to_async(set_online)(self.username)
-        await self.refresh_all_chat_partner_conversations()
+        await self.refresh_all_member_rooms()
 
     async def topics(self, event):
         # Send message to WebSocket
@@ -264,22 +255,13 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(str(self.room_id), self.channel_name)
 
-    async def fetch_chat_partner_is_online(self):
-        is_online = await database_sync_to_async(chat_partner_is_online)(
-            self.room_id, self.user
-        )
-        await self.channel_layer.send(
-            self.channel_name,
-            {"type": "chat_partner_online", "chat_partner_online": is_online},
-        )
-
     async def add_user_to_room(self, room):
-        member_display_names, was_added = await database_sync_to_async(
-            add_user_to_room
-        )(self.user, room)
+        members, was_added = await database_sync_to_async(add_user_to_room)(
+            self.user, room
+        )
         if was_added:
             await self.channel_layer.group_send(
-                self.room_id, {"type": "members", "members": member_display_names}
+                self.room_id, {"type": "members", "members": members}
             )
             await self.channel_layer.group_send(
                 self.user.username,
@@ -287,7 +269,7 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             )
         else:
             await self.channel_layer.send(
-                self.channel_name, {"type": "members", "members": member_display_names}
+                self.channel_name, {"type": "members", "members": members}
             )
 
     async def fetch_initial_messages(self, room):
@@ -331,7 +313,6 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
                 await self.fetch_initial_messages(room)
                 await self.fetch_display_name(room)
                 await self.read_conversation()
-                await self.fetch_chat_partner_is_online()
                 await self.channel_layer.send(
                     self.channel_name, {"type": "room", "room": str(room.id)}
                 )
@@ -399,20 +380,11 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         # Send message to WebSocket
         await self.send_json(event)
 
-    async def refresh_chat_partner_online(self, event):
-        await self.fetch_chat_partner_is_online()
-
     async def refresh_members(self, event):
-        member_display_names = await database_sync_to_async(
-            get_all_member_display_names
-        )(self.room_id)
+        members = await database_sync_to_async(get_all_members)(self.room_id)
         await self.channel_layer.group_send(
-            self.room_id, {"type": "members", "members": member_display_names}
+            self.room_id, {"type": "members", "members": members}
         )
-
-    async def chat_partner_online(self, event):
-        # Send message to WebSocket
-        await self.send_json(event)
 
     async def members(self, event):
         # Send message to WebSocket

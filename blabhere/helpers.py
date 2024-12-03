@@ -19,13 +19,6 @@ def get_display_name(room):
     return room.display_name
 
 
-def chat_partner_is_online(room_id, user):
-    room = Room.objects.filter(id=room_id).first()
-    other_member = room.members.exclude(id=user.id).first()
-    if other_member:
-        return other_member.is_online
-
-
 def get_all_room_ids(user):
     room_ids = list(user.room_set.all().values_list("id", flat=True))
     return room_ids
@@ -131,24 +124,15 @@ def read_unread_conversation(room_id, user):
 def get_user_conversations(username):
     user = User.objects.get(username=username)
     conversations = list(
-        user.conversation_set.annotate(
-            is_online=ArrayAgg(
-                "room__members__is_online",
-                filter=~Q(room__members__display_name=user.display_name),
-                distinct=True,
-            )
-        )
-        .values(
+        user.conversation_set.values(
             "room__id",
             "room__display_name",
             "read",
             "latest_message__creator__display_name",
             "latest_message__content",
             "latest_message__created_at",
-            "is_online",
             "created_at",
-        )
-        .order_by(
+        ).order_by(
             "read", F("latest_message__created_at").desc(nulls_last=True), "-created_at"
         )
     )
@@ -341,13 +325,16 @@ def get_user(username):
     return user
 
 
-def get_all_member_display_names(room_id):
+def get_all_members(room_id):
     members = []
     room = Room.objects.filter(id=room_id)
     if room.exists():
         room = room.first()
-        members = room.members.all().values("display_name")
-    return [member["display_name"] for member in members]
+        members = room.members.all().values("display_name", "is_online")
+    return [
+        {"name": member["display_name"], "is_online": member["is_online"]}
+        for member in members
+    ]
 
 
 def get_all_member_usernames(room_id):
@@ -368,8 +355,8 @@ def add_user_to_room(user, room):
             participant=user, room=room, latest_message=latest_message, read=True
         )
         was_added = True
-    member_display_names = get_all_member_display_names(room.id)
-    return member_display_names, was_added
+    members = get_all_members(room.id)
+    return members, was_added
 
 
 def get_initial_messages(room):
