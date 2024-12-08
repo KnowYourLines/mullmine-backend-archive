@@ -12,7 +12,9 @@ from unique_names_generator.data import ADJECTIVES, COLORS, ANIMALS
 
 from blabhere.models import Room, Message, User, Conversation, ChatTopic, ReportedChat
 
+NUM_MESSAGES_PER_PAGE = 10
 FULL_ROOM_NUM_MEMBERS = 10
+WAITING_ROOM_NUM_MEMBERS = 1
 
 
 def get_display_name(room):
@@ -222,7 +224,7 @@ def get_waiting_rooms(user):
         .annotate(num_members_online=num_members_online)
         .annotate(num_blocked_users=num_blocked_users)
         .filter(num_members__lt=FULL_ROOM_NUM_MEMBERS, num_blocked_users=0)
-        .exclude(members__id=user.id, num_members__gt=1)
+        .exclude(members__id=user.id, num_members__gt=WAITING_ROOM_NUM_MEMBERS)
     )
     return waiting_rooms
 
@@ -299,7 +301,11 @@ def initialize_room(room_id, user):
         if room_id:
             try:
                 room = Room.objects.get(id=room_id)
-                if 1 < room.members.count() <= FULL_ROOM_NUM_MEMBERS:
+                if (
+                    WAITING_ROOM_NUM_MEMBERS
+                    < room.members.count()
+                    <= FULL_ROOM_NUM_MEMBERS
+                ):
                     return room
             except ObjectDoesNotExist:
                 return None
@@ -361,7 +367,7 @@ def get_initial_messages(room, user):
         }
         for msg in room.message_set.exclude(creator__id__in=blocked_user_ids).order_by(
             "-created_at"
-        )[:10][::-1]
+        )[:NUM_MESSAGES_PER_PAGE][::-1]
     ]
     return messages
 
@@ -431,7 +437,7 @@ def get_prev_messages(oldest_msg_id, room, user):
             }
             for msg in room.message_set.filter(created_at__lt=oldest_msg.created_at)
             .exclude(creator__id__in=blocked_user_ids)
-            .order_by("-created_at")[:10][::-1]
+            .order_by("-created_at")[:NUM_MESSAGES_PER_PAGE][::-1]
         ]
     return messages
 
