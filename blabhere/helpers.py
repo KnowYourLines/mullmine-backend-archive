@@ -322,12 +322,19 @@ def get_all_members(room_id):
     room = Room.objects.filter(id=room_id)
     if room.exists():
         room = room.first()
-        members = room.members.all().values("display_name", "is_online", "username")
+        topic_names = ArrayAgg(
+            "chat_topics__name",
+            distinct=True,
+        )
+        members = room.members.annotate(topic_names=topic_names).values(
+            "display_name", "is_online", "username", "topic_names"
+        )
     return [
         {
             "name": member["display_name"],
             "is_online": member["is_online"],
             "username": member["username"],
+            "chat_topics": member["topic_names"],
         }
         for member in members
     ]

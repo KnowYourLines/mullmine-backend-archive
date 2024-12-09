@@ -179,6 +179,7 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
             created = await database_sync_to_async(save_topic)(self.user, new_topic)
             if created:
                 await self.fetch_chat_topics()
+                await self.refresh_all_member_rooms()
 
     async def agree_terms(self):
         await database_sync_to_async(agree_terms)(self.user.username)
@@ -190,6 +191,7 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
             removed = await database_sync_to_async(remove_topic)(self.user, topic)
             if removed:
                 await self.fetch_chat_topics()
+                await self.refresh_all_member_rooms()
 
     async def delete_account(self):
         await database_sync_to_async(delete_user)(self.user)
