@@ -42,9 +42,7 @@ class Room(models.Model):
     members = models.ManyToManyField(User)
     created_at = models.DateTimeField(auto_now_add=True)
     display_name = models.CharField(max_length=150)
-    topic = models.ForeignKey(
-        ChatTopic, on_delete=models.SET_NULL, null=True, related_name="chats"
-    )
+    topic = models.ForeignKey(ChatTopic, on_delete=models.CASCADE, related_name="chats")
 
 
 class Message(models.Model):
