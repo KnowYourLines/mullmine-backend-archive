@@ -21,9 +21,6 @@ from blabhere.helpers import (
     read_unread_conversation,
     leave_room,
     check_room_full,
-    save_topic,
-    get_user_topics,
-    remove_topic,
     get_user_agreed_terms,
     agree_terms,
     block_room_user,
@@ -59,13 +56,6 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
         await self.channel_layer.send(
             self.channel_name,
             {"type": "conversations", "conversations": conversations},
-        )
-
-    async def fetch_chat_topics(self):
-        topics = await database_sync_to_async(get_user_topics)(self.user.username)
-        await self.channel_layer.send(
-            self.channel_name,
-            {"type": "topics", "topics": topics},
         )
 
     async def fetch_agreed_terms_and_privacy(self):
@@ -113,7 +103,6 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
             await self.go_online()
             await self.fetch_conversations()
             await self.fetch_display_name()
-            await self.fetch_chat_topics()
             await self.fetch_agreed_terms_and_privacy()
         else:
             await self.close()
@@ -173,25 +162,9 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
                     },
                 )
 
-    async def add_topic(self, input_payload):
-        new_topic = input_payload.get("topic", "")
-        if len(new_topic.strip()) > 0:
-            created = await database_sync_to_async(save_topic)(self.user, new_topic)
-            if created:
-                await self.fetch_chat_topics()
-                await self.refresh_all_member_rooms()
-
     async def agree_terms(self):
         await database_sync_to_async(agree_terms)(self.user.username)
         await self.fetch_agreed_terms_and_privacy()
-
-    async def remove_topic(self, input_payload):
-        topic = input_payload.get("topic", "")
-        if len(topic.strip()) > 0:
-            removed = await database_sync_to_async(remove_topic)(self.user, topic)
-            if removed:
-                await self.fetch_chat_topics()
-                await self.refresh_all_member_rooms()
 
     async def delete_account(self):
         await database_sync_to_async(delete_user)(self.user)
@@ -202,10 +175,6 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
                 asyncio.create_task(self.exit_room(content))
             if content.get("command") == "update_display_name":
                 asyncio.create_task(self.update_display_name(content))
-            if content.get("command") == "add_topic":
-                asyncio.create_task(self.add_topic(content))
-            if content.get("command") == "remove_topic":
-                asyncio.create_task(self.remove_topic(content))
             if content.get("command") == "agree_terms":
                 asyncio.create_task(self.agree_terms())
             if content.get("command") == "delete_account":
@@ -230,10 +199,6 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
     async def remain_online(self, event):
         await database_sync_to_async(set_online)(self.username)
         await self.refresh_all_member_rooms()
-
-    async def topics(self, event):
-        # Send message to WebSocket
-        await self.send_json(event)
 
     async def refresh_conversations(self, event):
         # Send message to WebSocket

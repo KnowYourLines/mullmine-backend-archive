@@ -72,29 +72,6 @@ def agree_terms(username):
     User.objects.filter(username=username).update(agreed_terms_and_privacy=True)
 
 
-def get_user_topics(username):
-    user = User.objects.get(username=username)
-    return [topic.name for topic in user.chat_topics.all()]
-
-
-def remove_topic(user, topic):
-    removed = False
-    topic = ChatTopic.objects.filter(name=topic)
-    if topic.exists():
-        user.chat_topics.remove(topic.first())
-        removed = True
-    return removed
-
-
-def save_topic(user, topic):
-    added = False
-    new_topic, created = ChatTopic.objects.get_or_create(name=topic)
-    if not user.chat_topics.filter(id=new_topic.id).exists():
-        user.chat_topics.add(new_topic)
-        added = True
-    return added
-
-
 def leave_room(user, room_id):
     room_to_leave = Room.objects.get(id=room_id)
     if user in room_to_leave.members.all():
@@ -229,23 +206,6 @@ def get_waiting_rooms(user):
     return waiting_rooms
 
 
-def get_same_topics_users(user):
-    topics_ids = user.chat_topics.all().values_list("id", flat=True)
-    user_rooms_members_ids = (
-        User.objects.filter(room__in=user.room_set.all())
-        .values_list("id", flat=True)
-        .distinct()
-    )
-    users = (
-        User.objects.filter(chat_topics__id__in=topics_ids)
-        .exclude(
-            id__in=user_rooms_members_ids,
-        )
-        .distinct()
-    )
-    return users
-
-
 def find_waiting_room(user):
     waiting_rooms = get_waiting_rooms(user)
     user_rooms_ids = user.room_set.all().values_list("id", flat=True)
@@ -254,22 +214,13 @@ def find_waiting_room(user):
     )
     your_own_waiting_rooms = waiting_rooms.filter(members=user).order_by("-created_at")
     most_chatted_users = get_most_chatted_users_of_most_chatted_users(user)
-    same_topics_users = get_same_topics_users(user)
     num_most_chatted_users = Count(
         "members", filter=Q(members__in=most_chatted_users), distinct=True
-    )
-    num_same_topics_users = Count(
-        "members", filter=Q(members__in=same_topics_users), distinct=True
     )
     most_chatted_waiting_rooms = (
         waiting_rooms.annotate(num_most_chatted_users=num_most_chatted_users)
         .filter(num_most_chatted_users__gt=0)
         .order_by("-num_most_chatted_users", "-num_members_online", "-created_at")
-    )
-    same_topics_waiting_rooms = (
-        waiting_rooms.annotate(num_same_topics_users=num_same_topics_users)
-        .filter(num_same_topics_users__gt=0)
-        .order_by("-num_same_topics_users", "-num_members_online", "-created_at")
     )
     if most_chatted_waiting_rooms.exists() and your_own_waiting_rooms.exists():
         most_chatted_waiting_room = most_chatted_waiting_rooms.first()
@@ -277,12 +228,6 @@ def find_waiting_room(user):
         return most_chatted_waiting_room
     elif most_chatted_waiting_rooms.exists():
         return most_chatted_waiting_rooms.first()
-    elif same_topics_waiting_rooms.exists() and your_own_waiting_rooms.exists():
-        same_topics_waiting_room = same_topics_waiting_rooms.first()
-        your_own_waiting_rooms.delete()
-        return same_topics_waiting_room
-    elif same_topics_waiting_rooms.exists():
-        return same_topics_waiting_rooms.first()
     elif other_users_waiting_rooms.exists() and your_own_waiting_rooms.exists():
         other_user_waiting_room = other_users_waiting_rooms.first()
         your_own_waiting_rooms.delete()
@@ -322,19 +267,12 @@ def get_all_members(room_id):
     room = Room.objects.filter(id=room_id)
     if room.exists():
         room = room.first()
-        topic_names = ArrayAgg(
-            "chat_topics__name",
-            distinct=True,
-        )
-        members = room.members.annotate(topic_names=topic_names).values(
-            "display_name", "is_online", "username", "topic_names"
-        )
+        members = room.members.values("display_name", "is_online", "username")
     return [
         {
             "name": member["display_name"],
             "is_online": member["is_online"],
             "username": member["username"],
-            "chat_topics": member["topic_names"],
         }
         for member in members
     ]
