@@ -252,6 +252,7 @@ def find_rooms(user, topic_name):
             "latest_message_timestamp": (
                 room.latest_message_timestamp.timestamp()
                 if hasattr(room, "latest_message_timestamp")
+                and room.latest_message_timestamp
                 else None
             ),
             "created_at": room.created_at.timestamp(),
