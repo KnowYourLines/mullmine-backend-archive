@@ -31,6 +31,7 @@ from blabhere.helpers import (
     get_all_room_ids,
     get_display_name,
     is_blocked_creator,
+    find_rooms,
 )
 
 logger = logging.getLogger(__name__)
@@ -326,6 +327,13 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
                 self.room_id, self.user, username
             )
 
+    async def search_rooms(self, input_payload):
+        topic = input_payload.get("topic")
+        rooms = await database_sync_to_async(find_rooms)(self.user, topic)
+        await self.channel_layer.send(
+            self.channel_name, {"type": "search_results", "search_results": rooms}
+        )
+
     async def receive_json(self, content, **kwargs):
         if content.get("command") == "connect":
             if self.room_id:
@@ -333,6 +341,8 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
                     str(self.room_id), self.channel_name
                 )
             asyncio.create_task(self.initialize_room(content))
+        if content.get("command") == "find_rooms":
+            asyncio.create_task(self.search_rooms(content))
         if content.get("command") == "send_message":
             asyncio.create_task(self.send_message(content))
         if content.get("command") == "fetch_prev_messages":
@@ -353,6 +363,10 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         )
 
     async def members(self, event):
+        # Send message to WebSocket
+        await self.send_json(event)
+
+    async def search_results(self, event):
         # Send message to WebSocket
         await self.send_json(event)
 

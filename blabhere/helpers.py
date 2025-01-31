@@ -2,8 +2,9 @@ import logging
 
 from django.contrib.postgres.aggregates import ArrayAgg
 from django.core.exceptions import ObjectDoesNotExist
+from django.core.paginator import Paginator
 from django.db import IntegrityError
-from django.db.models import F, Count, Q, Case, When, FloatField
+from django.db.models import F, Count, Q, Case, When, FloatField, OuterRef
 from django.db.models.functions import Cast
 from django.db.models.lookups import GreaterThan
 from firebase_admin.auth import delete_user as delete_firebase_user
@@ -196,11 +197,17 @@ def get_waiting_rooms(user, topic):
     num_blocked_users = Count(
         "members", filter=Q(members__id__in=blocked_users_ids), distinct=True
     )
+    latest_message_timestamp = (
+        Message.objects.filter(room__id=OuterRef("id"))
+        .order_by("-created_at")
+        .values("created_at")[:1]
+    )
     waiting_rooms = (
         Room.objects.all()
         .annotate(num_members=num_members)
         .annotate(num_members_online=num_members_online)
         .annotate(num_blocked_users=num_blocked_users)
+        .annotate(latest_message_timestamp=latest_message_timestamp)
         .filter(num_members__lt=FULL_ROOM_NUM_MEMBERS, num_blocked_users=0, topic=topic)
         .exclude(members__id=user.id, num_members__gt=WAITING_ROOM_NUM_MEMBERS)
     )
@@ -211,9 +218,13 @@ def find_rooms(user, topic_name):
     waiting_rooms, topic = get_waiting_rooms(user, topic_name)
     user_rooms_ids = user.room_set.all().values_list("id", flat=True)
     other_users_waiting_rooms = waiting_rooms.exclude(id__in=user_rooms_ids).order_by(
-        "-created_at", "-num_members_online"
+        F("latest_message_timestamp").desc(nulls_last=True),
+        "-created_at",
+        "-num_members_online",
     )
-    your_own_waiting_rooms = waiting_rooms.filter(members=user).order_by("-created_at")
+    your_own_waiting_rooms = waiting_rooms.filter(members=user).order_by(
+        F("latest_message_timestamp").desc(nulls_last=True), "-created_at"
+    )
     most_chatted_users = get_most_chatted_users_of_most_chatted_users(user)
     num_most_chatted_users = Count(
         "members", filter=Q(members__in=most_chatted_users), distinct=True
@@ -221,21 +232,27 @@ def find_rooms(user, topic_name):
     most_chatted_waiting_rooms = (
         waiting_rooms.annotate(num_most_chatted_users=num_most_chatted_users)
         .filter(num_most_chatted_users__gt=0)
-        .order_by("-num_most_chatted_users", "-num_members_online", "-created_at")
+        .order_by(
+            "-num_most_chatted_users",
+            F("latest_message_timestamp").desc(nulls_last=True),
+            "-num_members_online",
+            "-created_at",
+        )
     )
     if most_chatted_waiting_rooms.exists():
         if your_own_waiting_rooms.exists():
             your_own_waiting_rooms.delete()
-        return most_chatted_waiting_rooms[:10]
+        rooms = most_chatted_waiting_rooms[:10]
     elif other_users_waiting_rooms.exists():
         if your_own_waiting_rooms.exists():
             your_own_waiting_rooms.delete()
-        return other_users_waiting_rooms[:10]
+        rooms = other_users_waiting_rooms[:10]
     elif your_own_waiting_rooms.exists():
-        return your_own_waiting_rooms[:10]
+        rooms = your_own_waiting_rooms[:10]
     else:
         display_name = get_random_name(combo=[COLORS, ADJECTIVES, ANIMALS])
-        return Room.objects.create(display_name=display_name, topic=topic)
+        rooms = [Room.objects.create(display_name=display_name, topic=topic)]
+    return [{"pk": str(room.id), "display_name": room.display_name} for room in rooms]
 
 
 def initialize_room(room_id, user):
