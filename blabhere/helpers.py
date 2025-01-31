@@ -2,7 +2,6 @@ import logging
 
 from django.contrib.postgres.aggregates import ArrayAgg
 from django.core.exceptions import ObjectDoesNotExist
-from django.core.paginator import Paginator
 from django.db import IntegrityError
 from django.db.models import F, Count, Q, Case, When, FloatField, OuterRef
 from django.db.models.functions import Cast
@@ -15,7 +14,6 @@ from blabhere.models import Room, Message, User, Conversation, ChatTopic, Report
 
 NUM_MESSAGES_PER_PAGE = 10
 FULL_ROOM_NUM_MEMBERS = 10
-WAITING_ROOM_NUM_MEMBERS = 1
 
 
 def get_display_name(room):
@@ -209,7 +207,6 @@ def get_waiting_rooms(user, topic):
         .annotate(num_blocked_users=num_blocked_users)
         .annotate(latest_message_timestamp=latest_message_timestamp)
         .filter(num_members__lt=FULL_ROOM_NUM_MEMBERS, num_blocked_users=0, topic=topic)
-        .exclude(members__id=user.id, num_members__gt=WAITING_ROOM_NUM_MEMBERS)
     )
     return waiting_rooms, topic
 
@@ -222,7 +219,7 @@ def find_rooms(user, topic_name):
         "-created_at",
         "-num_members_online",
     )
-    your_own_waiting_rooms = waiting_rooms.filter(members=user).order_by(
+    your_own_waiting_rooms = waiting_rooms.filter(id__in=user_rooms_ids).order_by(
         F("latest_message_timestamp").desc(nulls_last=True), "-created_at"
     )
     most_chatted_users = get_most_chatted_users_of_most_chatted_users(user)
@@ -240,12 +237,8 @@ def find_rooms(user, topic_name):
         )
     )
     if most_chatted_waiting_rooms.exists():
-        if your_own_waiting_rooms.exists():
-            your_own_waiting_rooms.delete()
         rooms = most_chatted_waiting_rooms[:10]
     elif other_users_waiting_rooms.exists():
-        if your_own_waiting_rooms.exists():
-            your_own_waiting_rooms.delete()
         rooms = other_users_waiting_rooms[:10]
     elif your_own_waiting_rooms.exists():
         rooms = your_own_waiting_rooms[:10]
@@ -260,12 +253,7 @@ def initialize_room(room_id, user):
         if room_id:
             try:
                 room = Room.objects.get(id=room_id)
-                if (
-                    WAITING_ROOM_NUM_MEMBERS
-                    < room.members.count()
-                    <= FULL_ROOM_NUM_MEMBERS
-                ):
-                    return room
+                return room
             except ObjectDoesNotExist:
                 return None
 
