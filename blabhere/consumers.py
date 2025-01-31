@@ -329,11 +329,16 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
 
     async def search_rooms(self, input_payload):
         topic = input_payload.get("topic")
-        rooms = await database_sync_to_async(find_rooms)(self.user, topic)
-        await self.channel_layer.send(
-            self.channel_name,
-            {"type": "search_results", "search_results": rooms, "search_topic": topic},
-        )
+        if topic:
+            rooms = await database_sync_to_async(find_rooms)(self.user, topic)
+            await self.channel_layer.send(
+                self.channel_name,
+                {
+                    "type": "search_results",
+                    "search_results": rooms,
+                    "search_topic": topic,
+                },
+            )
 
     async def receive_json(self, content, **kwargs):
         if content.get("command") == "connect":
