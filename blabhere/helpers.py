@@ -245,7 +245,19 @@ def find_rooms(user, topic_name):
     else:
         display_name = get_random_name(combo=[COLORS, ADJECTIVES, ANIMALS])
         rooms = [Room.objects.create(display_name=display_name, topic=topic)]
-    return [{"pk": str(room.id), "display_name": room.display_name} for room in rooms]
+    return [
+        {
+            "pk": str(room.id),
+            "display_name": room.display_name,
+            "latest_message_timestamp": (
+                room.latest_message_timestamp.timestamp()
+                if hasattr(room, "latest_message_timestamp")
+                else None
+            ),
+            "created_at": room.created_at.timestamp(),
+        }
+        for room in rooms
+    ]
 
 
 def initialize_room(room_id, user):
