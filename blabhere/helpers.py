@@ -186,7 +186,8 @@ def get_most_chatted_users_of_most_chatted_users(user):
     return users
 
 
-def get_waiting_rooms(user):
+def get_waiting_rooms(user, topic):
+    topic, created = ChatTopic.objects.get_or_create(name=topic)
     blocked_users_ids = user.blocked_users.all().values_list("id", flat=True)
     num_members = Count("members", distinct=True)
     num_members_online = Count(
@@ -200,14 +201,14 @@ def get_waiting_rooms(user):
         .annotate(num_members=num_members)
         .annotate(num_members_online=num_members_online)
         .annotate(num_blocked_users=num_blocked_users)
-        .filter(num_members__lt=FULL_ROOM_NUM_MEMBERS, num_blocked_users=0)
+        .filter(num_members__lt=FULL_ROOM_NUM_MEMBERS, num_blocked_users=0, topic=topic)
         .exclude(members__id=user.id, num_members__gt=WAITING_ROOM_NUM_MEMBERS)
     )
-    return waiting_rooms
+    return waiting_rooms, topic
 
 
-def find_waiting_room(user):
-    waiting_rooms = get_waiting_rooms(user)
+def find_rooms(user, topic_name):
+    waiting_rooms, topic = get_waiting_rooms(user, topic_name)
     user_rooms_ids = user.room_set.all().values_list("id", flat=True)
     other_users_waiting_rooms = waiting_rooms.exclude(id__in=user_rooms_ids).order_by(
         "-created_at", "-num_members_online"
@@ -222,23 +223,19 @@ def find_waiting_room(user):
         .filter(num_most_chatted_users__gt=0)
         .order_by("-num_most_chatted_users", "-num_members_online", "-created_at")
     )
-    if most_chatted_waiting_rooms.exists() and your_own_waiting_rooms.exists():
-        most_chatted_waiting_room = most_chatted_waiting_rooms.first()
-        your_own_waiting_rooms.delete()
-        return most_chatted_waiting_room
-    elif most_chatted_waiting_rooms.exists():
-        return most_chatted_waiting_rooms.first()
-    elif other_users_waiting_rooms.exists() and your_own_waiting_rooms.exists():
-        other_user_waiting_room = other_users_waiting_rooms.first()
-        your_own_waiting_rooms.delete()
-        return other_user_waiting_room
+    if most_chatted_waiting_rooms.exists():
+        if your_own_waiting_rooms.exists():
+            your_own_waiting_rooms.delete()
+        return most_chatted_waiting_rooms[:10]
     elif other_users_waiting_rooms.exists():
-        return other_users_waiting_rooms.first()
+        if your_own_waiting_rooms.exists():
+            your_own_waiting_rooms.delete()
+        return other_users_waiting_rooms[:10]
     elif your_own_waiting_rooms.exists():
-        return your_own_waiting_rooms.first()
+        return your_own_waiting_rooms[:10]
     else:
         display_name = get_random_name(combo=[COLORS, ADJECTIVES, ANIMALS])
-        return Room.objects.create(display_name=display_name)
+        return Room.objects.create(display_name=display_name, topic=topic)
 
 
 def initialize_room(room_id, user):
@@ -254,7 +251,6 @@ def initialize_room(room_id, user):
                     return room
             except ObjectDoesNotExist:
                 return None
-        return find_waiting_room(user)
 
 
 def get_user(username):
