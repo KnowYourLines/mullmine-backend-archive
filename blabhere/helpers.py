@@ -145,7 +145,6 @@ def get_popular_topics(user):
             "-num_rooms",
             "-latest_msg",
             "-latest_room",
-            "name",
         )
         .values()[:10]
     )
