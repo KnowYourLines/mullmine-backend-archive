@@ -149,7 +149,7 @@ def get_popular_topics(user):
         )
         .values()[:10]
     )
-    return [topic["name"] for topic in topics]
+    return [{"name": topic["name"], "id": str(topic["id"])} for topic in topics]
 
 
 def get_most_chatted_users(user, exclude_room_ids=None):
