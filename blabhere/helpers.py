@@ -3,7 +3,7 @@ import logging
 from django.contrib.postgres.aggregates import ArrayAgg
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
-from django.db.models import F, Count, Q, Case, When, FloatField, OuterRef
+from django.db.models import F, Count, Q, Case, When, FloatField, OuterRef, Max
 from django.db.models.functions import Cast
 from django.db.models.lookups import GreaterThan
 from firebase_admin.auth import delete_user as delete_firebase_user
@@ -124,6 +124,32 @@ def get_room(room_id):
         return room
     except ObjectDoesNotExist:
         logging.error(f"Room id {room_id} does not exist")
+
+
+def get_popular_topics(user):
+    most_chatted_users = get_most_chatted_users_of_most_chatted_users(user)
+    num_most_chatted_users = Count(
+        "chats__members", filter=Q(chats__members__in=most_chatted_users), distinct=True
+    )
+    num_rooms = Count("chats", distinct=True)
+    num_members = Count("chats__members", distinct=True)
+    topics = (
+        ChatTopic.objects.annotate(num_rooms=num_rooms)
+        .annotate(num_members=num_members)
+        .annotate(num_most_chatted_users=num_most_chatted_users)
+        .annotate(latest_room=Max("chats__created_at"))
+        .annotate(latest_msg=Max("chats__message__created_at"))
+        .order_by(
+            "-num_most_chatted_users",
+            "-num_members",
+            "-num_rooms",
+            "-latest_msg",
+            "-latest_room",
+            "name",
+        )
+        .values()[:10]
+    )
+    return [topic["name"] for topic in topics]
 
 
 def get_most_chatted_users(user, exclude_room_ids=None):
