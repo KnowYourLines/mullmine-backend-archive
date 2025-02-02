@@ -217,7 +217,6 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
     async def connect(self):
         await self.accept()
         self.user = self.scope["user"]
-        await self.find_popular_topics()
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(str(self.room_id), self.channel_name)
