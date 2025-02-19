@@ -270,6 +270,8 @@ def find_rooms(user, topic_name):
         rooms = other_users_waiting_rooms[:10]
     elif your_own_waiting_rooms.exists():
         rooms = your_own_waiting_rooms[:10]
+    else:
+        rooms = waiting_rooms[:10]
     return [
         {
             "pk": str(room.id),
