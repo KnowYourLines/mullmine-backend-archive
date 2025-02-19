@@ -29,7 +29,7 @@ from blabhere.helpers import (
     set_offline,
     set_online,
     get_all_room_ids,
-    get_display_name,
+    get_question,
     is_blocked_creator,
     find_rooms,
     get_popular_topics,
@@ -244,10 +244,10 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             self.channel_name, {"type": "messages", "messages": messages}
         )
 
-    async def fetch_display_name(self, room):
-        display_name = await database_sync_to_async(get_display_name)(room)
+    async def fetch_question(self, room):
+        question = await database_sync_to_async(get_question)(room)
         await self.channel_layer.send(
-            self.channel_name, {"type": "display_name", "display_name": display_name}
+            self.channel_name, {"type": "question", "question": question}
         )
 
     async def fetch_prev_messages(self, input_payload):
@@ -279,7 +279,7 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
                 await self.channel_layer.group_add(self.room_id, self.channel_name)
                 await self.add_user_to_room(room)
                 await self.fetch_initial_messages(room)
-                await self.fetch_display_name(room)
+                await self.fetch_question(room)
                 await self.read_conversation()
                 await self.channel_layer.send(
                     self.channel_name, {"type": "room", "room": str(room.id)}
@@ -393,7 +393,7 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         # Send message to WebSocket
         await self.send_json(event)
 
-    async def display_name(self, event):
+    async def question(self, event):
         # Send message to WebSocket
         await self.send_json(event)
 

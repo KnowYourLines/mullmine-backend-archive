@@ -7,8 +7,6 @@ from django.db.models import F, Count, Q, Case, When, FloatField, OuterRef, Max
 from django.db.models.functions import Cast
 from django.db.models.lookups import GreaterThan
 from firebase_admin.auth import delete_user as delete_firebase_user
-from unique_names_generator import get_random_name
-from unique_names_generator.data import ADJECTIVES, COLORS, ANIMALS
 
 from blabhere.models import Room, Message, User, Conversation, ChatTopic, ReportedChat
 
@@ -16,8 +14,8 @@ NUM_MESSAGES_PER_PAGE = 10
 FULL_ROOM_NUM_MEMBERS = 10
 
 
-def get_display_name(room):
-    return room.display_name
+def get_question(room):
+    return room.question
 
 
 def get_all_room_ids(user):
@@ -90,7 +88,7 @@ def get_user_conversations(username):
     conversations = list(
         user.conversation_set.values(
             "room__id",
-            "room__display_name",
+            "room__question",
             "read",
             "latest_message__creator__display_name",
             "latest_message__content",
@@ -272,13 +270,10 @@ def find_rooms(user, topic_name):
         rooms = other_users_waiting_rooms[:10]
     elif your_own_waiting_rooms.exists():
         rooms = your_own_waiting_rooms[:10]
-    else:
-        display_name = get_random_name(combo=[COLORS, ADJECTIVES, ANIMALS])
-        rooms = [Room.objects.create(display_name=display_name, topic=topic)]
     return [
         {
             "pk": str(room.id),
-            "display_name": room.display_name,
+            "question": room.question,
             "latest_message_timestamp": (
                 room.latest_message_timestamp.timestamp()
                 if hasattr(room, "latest_message_timestamp")

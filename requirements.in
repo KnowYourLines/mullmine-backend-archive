@@ -6,4 +6,3 @@ psycopg2>=2.8
 dj-database-url
 whitenoise[brotli]
 firebase-admin
-unique-names-generator

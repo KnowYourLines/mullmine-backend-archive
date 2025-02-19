@@ -18,7 +18,7 @@ channels[daphne]==4.2.0
 channels-redis==4.2.1
 charset-normalizer==3.4.1
 constantly==23.10.4
-cryptography==44.0.0
+cryptography==44.0.1
 daphne==4.1.2
 dj-database-url==2.3.0
 django==4.2.18
@@ -59,7 +59,6 @@ tomli==2.2.1
 twisted[tls]==24.11.0
 txaio==23.1.1
 typing-extensions==4.12.2
-unique-names-generator==1.0.2
 uritemplate==4.1.1
 urllib3==2.3.0
 whitenoise[brotli]==6.8.2
