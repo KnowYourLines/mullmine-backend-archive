@@ -14,6 +14,12 @@ NUM_MESSAGES_PER_PAGE = 10
 FULL_ROOM_NUM_MEMBERS = 10
 
 
+def create_room(question, topic_name):
+    topic, created = ChatTopic.objects.get_or_create(name=topic_name)
+    room = Room.objects.create(question=question, topic=topic)
+    return {"room": room.id}
+
+
 def get_question(room):
     return room.question
 

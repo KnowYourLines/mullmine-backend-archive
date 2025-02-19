@@ -33,6 +33,7 @@ from blabhere.helpers import (
     is_blocked_creator,
     find_rooms,
     get_popular_topics,
+    create_room,
 )
 
 logger = logging.getLogger(__name__)
@@ -351,6 +352,14 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             },
         )
 
+    async def create_room(self, input_payload):
+        topic = input_payload.get("topic")
+        question = input_payload.get("question")
+        room_payload = await database_sync_to_async(create_room)(question, topic)
+        if self.room_id:
+            await self.channel_layer.group_discard(str(self.room_id), self.channel_name)
+        await self.initialize_room(room_payload)
+
     async def receive_json(self, content, **kwargs):
         if content.get("command") == "connect":
             if self.room_id:
@@ -370,6 +379,8 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             asyncio.create_task(self.report_user(content))
         if content.get("command") == "find_popular_topics":
             asyncio.create_task(self.find_popular_topics())
+        if content.get("command") == "create_room":
+            asyncio.create_task(self.create_room(content))
 
     async def room(self, event):
         # Send message to WebSocket
