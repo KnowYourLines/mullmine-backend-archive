@@ -11,7 +11,7 @@ from firebase_admin.auth import delete_user as delete_firebase_user
 from blabhere.models import Room, Message, User, Conversation, ChatTopic, ReportedChat
 
 NUM_MESSAGES_PER_PAGE = 10
-FULL_ROOM_NUM_MEMBERS = 10
+FULL_ROOM_NUM_MEMBERS = 5
 
 
 def create_room(question, topic_name):
