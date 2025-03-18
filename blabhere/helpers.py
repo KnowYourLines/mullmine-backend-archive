@@ -269,7 +269,6 @@ def find_rooms(user, topic_name):
     rooms = (
         waiting_rooms.annotate(num_most_chatted_users=num_most_chatted_users)
         .annotate(already_joined=already_joined)
-        .filter(num_most_chatted_users__gt=0)
         .order_by(
             "already_joined",
             "-num_most_chatted_users",
