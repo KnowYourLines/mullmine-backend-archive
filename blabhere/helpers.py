@@ -3,7 +3,17 @@ import logging
 from django.contrib.postgres.aggregates import ArrayAgg
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
-from django.db.models import F, Count, Q, Case, When, FloatField, OuterRef, Max
+from django.db.models import (
+    F,
+    Count,
+    Q,
+    Case,
+    When,
+    FloatField,
+    OuterRef,
+    Max,
+    BooleanField,
+)
 from django.db.models.functions import Cast
 from django.db.models.lookups import GreaterThan
 from firebase_admin.auth import delete_user as delete_firebase_user
@@ -247,37 +257,29 @@ def get_waiting_rooms(user, topic):
 
 def find_rooms(user, topic_name):
     waiting_rooms, topic = get_waiting_rooms(user, topic_name)
-    user_rooms_ids = user.room_set.all().values_list("id", flat=True)
-    other_users_waiting_rooms = waiting_rooms.exclude(id__in=user_rooms_ids).order_by(
-        F("latest_message_timestamp").desc(nulls_last=True),
-        "-created_at",
-        "-num_members_online",
-    )
-    your_own_waiting_rooms = waiting_rooms.filter(id__in=user_rooms_ids).order_by(
-        F("latest_message_timestamp").desc(nulls_last=True), "-created_at"
-    )
+
     most_chatted_users = get_most_chatted_users_of_most_chatted_users(user)
     num_most_chatted_users = Count(
         "members", filter=Q(members__in=most_chatted_users), distinct=True
     )
-    most_chatted_waiting_rooms = (
+    user_rooms_ids = user.room_set.all().values_list("id", flat=True)
+    already_joined = Case(
+        When(id__in=user_rooms_ids, then=True), output_field=BooleanField()
+    )
+    rooms = (
         waiting_rooms.annotate(num_most_chatted_users=num_most_chatted_users)
+        .annotate(already_joined=already_joined)
         .filter(num_most_chatted_users__gt=0)
         .order_by(
+            "already_joined",
             "-num_most_chatted_users",
-            F("latest_message_timestamp").desc(nulls_last=True),
             "-num_members_online",
+            F("latest_message_timestamp").desc(nulls_last=True),
             "-created_at",
         )
     )
-    if most_chatted_waiting_rooms.exists():
-        rooms = most_chatted_waiting_rooms[:10]
-    elif other_users_waiting_rooms.exists():
-        rooms = other_users_waiting_rooms[:10]
-    elif your_own_waiting_rooms.exists():
-        rooms = your_own_waiting_rooms[:10]
-    else:
-        rooms = waiting_rooms[:10]
+
+    rooms = rooms[:10]
     return [
         {
             "pk": str(room.id),
