@@ -160,8 +160,8 @@ def get_popular_topics(user):
         .order_by(
             "-num_most_chatted_users",
             "-num_members_online",
-            "-latest_msg",
-            "-latest_room",
+            F("latest_msg").desc(nulls_last=True),
+            F("latest_room").desc(nulls_last=True),
             "-num_members",
             "-num_rooms",
         )
