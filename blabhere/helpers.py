@@ -90,6 +90,8 @@ def leave_room(user, room_id):
     if user in room_to_leave.members.all():
         user.conversation_set.filter(room=room_to_leave).delete()
         room_to_leave.members.remove(user)
+        if room_to_leave.members.count() == 0:
+            room_to_leave.delete()
 
 
 def read_unread_conversation(room_id, user):
