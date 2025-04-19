@@ -227,7 +227,7 @@ def get_most_chatted_users_of_most_chatted_users(user):
     return users
 
 
-def get_waiting_rooms(user):
+def get_waiting_rooms(user, question):
     blocked_users_ids = user.blocked_users.all().values_list("id", flat=True)
     num_members = Count("members", distinct=True)
     num_members_online = Count(
@@ -247,13 +247,17 @@ def get_waiting_rooms(user):
         .annotate(num_members_online=num_members_online)
         .annotate(num_blocked_users=num_blocked_users)
         .annotate(latest_message_timestamp=latest_message_timestamp)
-        .filter(num_members__lt=FULL_ROOM_NUM_MEMBERS, num_blocked_users=0)
+        .filter(
+            num_members__lt=FULL_ROOM_NUM_MEMBERS,
+            num_blocked_users=0,
+            question__icontains=question,
+        )
     )
     return waiting_rooms
 
 
-def find_rooms(user):
-    waiting_rooms = get_waiting_rooms(user)
+def find_rooms(user, question):
+    waiting_rooms = get_waiting_rooms(user, question)
 
     most_chatted_users = get_most_chatted_users_of_most_chatted_users(user)
     num_most_chatted_users = Count(

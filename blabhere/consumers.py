@@ -330,15 +330,14 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             )
 
     async def search_rooms(self, input_payload):
-        topic = input_payload.get("topic")
-        if topic:
-            rooms = await database_sync_to_async(find_rooms)(self.user, topic)
+        question = input_payload.get("question")
+        if question:
+            rooms = await database_sync_to_async(find_rooms)(self.user, question)
             await self.channel_layer.send(
                 self.channel_name,
                 {
                     "type": "search_results",
                     "search_results": rooms,
-                    "search_topic": topic,
                 },
             )
 
@@ -353,9 +352,8 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         )
 
     async def create_room(self, input_payload):
-        topic = input_payload.get("topic")
         question = input_payload.get("question")
-        room_payload = await database_sync_to_async(create_room)(question, topic)
+        room_payload = await database_sync_to_async(create_room)(question)
         if self.room_id:
             await self.channel_layer.group_discard(str(self.room_id), self.channel_name)
         await self.initialize_room(room_payload)
