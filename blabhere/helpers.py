@@ -18,15 +18,14 @@ from django.db.models.functions import Cast
 from django.db.models.lookups import GreaterThan
 from firebase_admin.auth import delete_user as delete_firebase_user
 
-from blabhere.models import Room, Message, User, Conversation, ChatTopic, ReportedChat
+from blabhere.models import Room, Message, User, Conversation, ReportedChat
 
 NUM_MESSAGES_PER_PAGE = 10
 FULL_ROOM_NUM_MEMBERS = 10
 
 
-def create_room(question, topic_name):
-    topic, created = ChatTopic.objects.get_or_create(name=topic_name)
-    room = Room.objects.create(question=question, topic=topic)
+def create_room(question):
+    room = Room.objects.create(question=question)
     return {"room": room.id}
 
 
@@ -142,19 +141,17 @@ def get_room(room_id):
         logging.error(f"Room id {room_id} does not exist")
 
 
-def get_popular_topics(user):
+def get_active_questions(user):
     most_chatted_users = get_most_chatted_users_of_most_chatted_users(user)
     num_most_chatted_users = Count(
-        "chats__members", filter=Q(chats__members__in=most_chatted_users), distinct=True
+        "members", filter=Q(members__in=most_chatted_users), distinct=True
     )
-    num_rooms = Count("chats", distinct=True)
-    num_members = Count("chats__members", distinct=True)
+    num_members = Count("members", distinct=True)
     num_members_online = Count(
-        "chats__members", filter=Q(chats__members__is_online=True), distinct=True
+        "members", filter=Q(members__is_online=True), distinct=True
     )
-    topics = (
-        ChatTopic.objects.annotate(num_rooms=num_rooms)
-        .annotate(num_members=num_members)
+    rooms = (
+        Room.objects.annotate(num_members=num_members)
         .annotate(num_most_chatted_users=num_most_chatted_users)
         .annotate(num_members_online=num_members_online)
         .annotate(latest_room=Max("chats__created_at"))
@@ -165,11 +162,10 @@ def get_popular_topics(user):
             F("latest_msg").desc(nulls_last=True),
             F("latest_room").desc(nulls_last=True),
             "-num_members",
-            "-num_rooms",
         )
         .values()[:10]
     )
-    return [{"name": topic["name"], "id": str(topic["id"])} for topic in topics]
+    return [{"question": room["question"], "id": str(room["id"])} for room in rooms]
 
 
 def get_most_chatted_users(user, exclude_room_ids=None):
@@ -231,8 +227,7 @@ def get_most_chatted_users_of_most_chatted_users(user):
     return users
 
 
-def get_waiting_rooms(user, topic):
-    topic, created = ChatTopic.objects.get_or_create(name=topic)
+def get_waiting_rooms(user):
     blocked_users_ids = user.blocked_users.all().values_list("id", flat=True)
     num_members = Count("members", distinct=True)
     num_members_online = Count(
@@ -252,13 +247,13 @@ def get_waiting_rooms(user, topic):
         .annotate(num_members_online=num_members_online)
         .annotate(num_blocked_users=num_blocked_users)
         .annotate(latest_message_timestamp=latest_message_timestamp)
-        .filter(num_members__lt=FULL_ROOM_NUM_MEMBERS, num_blocked_users=0, topic=topic)
+        .filter(num_members__lt=FULL_ROOM_NUM_MEMBERS, num_blocked_users=0)
     )
-    return waiting_rooms, topic
+    return waiting_rooms
 
 
-def find_rooms(user, topic_name):
-    waiting_rooms, topic = get_waiting_rooms(user, topic_name)
+def find_rooms(user):
+    waiting_rooms = get_waiting_rooms(user)
 
     most_chatted_users = get_most_chatted_users_of_most_chatted_users(user)
     num_most_chatted_users = Count(

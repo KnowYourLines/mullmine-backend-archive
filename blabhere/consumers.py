@@ -32,7 +32,7 @@ from blabhere.helpers import (
     get_question,
     is_blocked_creator,
     find_rooms,
-    get_popular_topics,
+    get_active_questions,
     create_room,
 )
 
@@ -342,13 +342,13 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
                 },
             )
 
-    async def find_popular_topics(self):
-        topics = await database_sync_to_async(get_popular_topics)(self.user)
+    async def find_active_questions(self):
+        questions = await database_sync_to_async(get_active_questions)(self.user)
         await self.channel_layer.send(
             self.channel_name,
             {
-                "type": "popular_topics",
-                "popular_topics": topics,
+                "type": "active_questions",
+                "active_questions": questions,
             },
         )
 
@@ -377,8 +377,8 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             asyncio.create_task(self.block_user(content))
         if content.get("command") == "report_user":
             asyncio.create_task(self.report_user(content))
-        if content.get("command") == "find_popular_topics":
-            asyncio.create_task(self.find_popular_topics())
+        if content.get("command") == "find_active_questions":
+            asyncio.create_task(self.find_active_questions())
         if content.get("command") == "create_room":
             asyncio.create_task(self.create_room(content))
 
@@ -400,7 +400,7 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         # Send message to WebSocket
         await self.send_json(event)
 
-    async def popular_topics(self, event):
+    async def active_questions(self, event):
         # Send message to WebSocket
         await self.send_json(event)
 
