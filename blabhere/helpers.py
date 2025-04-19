@@ -154,8 +154,8 @@ def get_active_questions(user):
         Room.objects.annotate(num_members=num_members)
         .annotate(num_most_chatted_users=num_most_chatted_users)
         .annotate(num_members_online=num_members_online)
-        .annotate(latest_room=Max("chats__created_at"))
-        .annotate(latest_msg=Max("chats__message__created_at"))
+        .annotate(latest_room=Max("created_at"))
+        .annotate(latest_msg=Max("message__created_at"))
         .order_by(
             "-num_most_chatted_users",
             "-num_members_online",
