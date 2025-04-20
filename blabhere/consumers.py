@@ -358,6 +358,18 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             await self.channel_layer.group_discard(str(self.room_id), self.channel_name)
         await self.initialize_room(room_payload)
 
+    async def suggest_questions(self, input_payload):
+        question = input_payload.get("question")
+        if question:
+            rooms = await database_sync_to_async(find_rooms)(self.user, question)
+            await self.channel_layer.send(
+                self.channel_name,
+                {
+                    "type": "suggested_questions",
+                    "suggested_questions": [room["question"] for room in rooms],
+                },
+            )
+
     async def receive_json(self, content, **kwargs):
         if content.get("command") == "connect":
             if self.room_id:
@@ -379,6 +391,8 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             asyncio.create_task(self.find_active_questions())
         if content.get("command") == "create_room":
             asyncio.create_task(self.create_room(content))
+        if content.get("command") == "suggest_questions":
+            asyncio.create_task(self.suggest_questions(content))
 
     async def room(self, event):
         # Send message to WebSocket
@@ -395,6 +409,10 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         await self.send_json(event)
 
     async def search_results(self, event):
+        # Send message to WebSocket
+        await self.send_json(event)
+
+    async def suggested_questions(self, event):
         # Send message to WebSocket
         await self.send_json(event)
 
