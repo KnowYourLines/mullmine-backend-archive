@@ -226,7 +226,7 @@ def get_most_chatted_users_of_most_chatted_users(user):
     return users
 
 
-def find_rooms(user, question):
+def get_all_chats(user, question):
     blocked_users_ids = user.blocked_users.all().values_list("id", flat=True)
     num_blocked_users = Count(
         "members", filter=Q(members__id__in=blocked_users_ids), distinct=True
@@ -269,7 +269,11 @@ def find_rooms(user, question):
             "-created_at",
         )
     )
+    return rooms
 
+
+def find_rooms(user, question):
+    rooms = get_all_chats(user, question)
     rooms = rooms[:10]
     return [
         {
@@ -285,6 +289,17 @@ def find_rooms(user, question):
         }
         for room in rooms
     ]
+
+
+def suggest_questions(user, question):
+    rooms = get_all_chats(user, question)
+    suggestions = []
+    for room in rooms:
+        if room.question not in suggestions:
+            suggestions.append(room.question)
+        if len(suggestions) == 10:
+            break
+    return suggestions
 
 
 def initialize_room(room_id, user):

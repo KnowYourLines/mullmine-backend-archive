@@ -34,6 +34,7 @@ from blabhere.helpers import (
     find_rooms,
     get_active_questions,
     create_room,
+    suggest_questions,
 )
 
 logger = logging.getLogger(__name__)
@@ -361,12 +362,14 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
     async def suggest_questions(self, input_payload):
         question = input_payload.get("question")
         if question:
-            rooms = await database_sync_to_async(find_rooms)(self.user, question)
+            suggestions = await database_sync_to_async(suggest_questions)(
+                self.user, question
+            )
             await self.channel_layer.send(
                 self.channel_name,
                 {
                     "type": "suggested_questions",
-                    "suggested_questions": [room["question"] for room in rooms],
+                    "suggested_questions": suggestions,
                 },
             )
 
