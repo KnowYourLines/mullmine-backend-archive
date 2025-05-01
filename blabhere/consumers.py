@@ -353,11 +353,14 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         )
 
     async def create_room(self, input_payload):
-        question = input_payload.get("question")
-        room_payload = await database_sync_to_async(create_room)(question)
-        if self.room_id:
-            await self.channel_layer.group_discard(str(self.room_id), self.channel_name)
-        await self.initialize_room(room_payload)
+        if self.user.is_verified:
+            question = input_payload.get("question")
+            room_payload = await database_sync_to_async(create_room)(question)
+            if self.room_id:
+                await self.channel_layer.group_discard(
+                    str(self.room_id), self.channel_name
+                )
+            await self.initialize_room(room_payload)
 
     async def suggest_questions(self, input_payload):
         question = input_payload.get("question")
