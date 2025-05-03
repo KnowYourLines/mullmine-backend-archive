@@ -146,6 +146,10 @@ def get_active_questions(user):
     num_most_chatted_users = Count(
         "members", filter=Q(members__in=most_chatted_users), distinct=True
     )
+    blocked_users_ids = user.blocked_users.all().values_list("id", flat=True)
+    num_blocked_users = Count(
+        "members", filter=Q(members__id__in=blocked_users_ids), distinct=True
+    )
     num_members = Count("members", distinct=True)
     num_members_online = Count(
         "members", filter=Q(members__is_online=True), distinct=True
@@ -154,7 +158,12 @@ def get_active_questions(user):
         Room.objects.annotate(num_members=num_members)
         .annotate(num_most_chatted_users=num_most_chatted_users)
         .annotate(num_members_online=num_members_online)
+        .annotate(num_blocked_users=num_blocked_users)
         .annotate(latest_msg=Max("message__created_at"))
+        .filter(
+            num_members__lt=FULL_ROOM_NUM_MEMBERS,
+            num_blocked_users=0,
+        )
         .order_by(
             "-num_most_chatted_users",
             "-num_members_online",
