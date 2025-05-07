@@ -142,9 +142,19 @@ def get_room(room_id):
 
 
 def get_active_questions(user):
-    most_chatted_users = get_most_chatted_users_of_most_chatted_users(user)
+    most_chatted_users_of_most_chatted_users = (
+        get_most_chatted_users_of_most_chatted_users(user)
+    )
+    num_most_chatted_users_of_most_chatted_users = Count(
+        "members",
+        filter=Q(members__in=most_chatted_users_of_most_chatted_users),
+        distinct=True,
+    )
+    most_chatted_users = get_most_chatted_users(user)
     num_most_chatted_users = Count(
-        "members", filter=Q(members__in=most_chatted_users), distinct=True
+        "members",
+        filter=Q(members__in=most_chatted_users),
+        distinct=True,
     )
     blocked_users_ids = user.blocked_users.all().values_list("id", flat=True)
     num_blocked_users = Count(
@@ -156,6 +166,9 @@ def get_active_questions(user):
     )
     rooms = (
         Room.objects.annotate(num_members=num_members)
+        .annotate(
+            num_most_chatted_users_of_most_chatted_users=num_most_chatted_users_of_most_chatted_users
+        )
         .annotate(num_most_chatted_users=num_most_chatted_users)
         .annotate(num_members_online=num_members_online)
         .annotate(num_blocked_users=num_blocked_users)
@@ -165,6 +178,7 @@ def get_active_questions(user):
             num_blocked_users=0,
         )
         .order_by(
+            "-num_most_chatted_users_of_most_chatted_users",
             "-num_most_chatted_users",
             "-num_members_online",
             F("latest_msg").desc(nulls_last=True),
@@ -244,9 +258,19 @@ def get_all_chats(user, question):
     num_members_online = Count(
         "members", filter=Q(members__is_online=True), distinct=True
     )
-    most_chatted_users = get_most_chatted_users_of_most_chatted_users(user)
+    most_chatted_users_of_most_chatted_users = (
+        get_most_chatted_users_of_most_chatted_users(user)
+    )
+    num_most_chatted_users_of_most_chatted_users = Count(
+        "members",
+        filter=Q(members__in=most_chatted_users_of_most_chatted_users),
+        distinct=True,
+    )
+    most_chatted_users = get_most_chatted_users(user)
     num_most_chatted_users = Count(
-        "members", filter=Q(members__in=most_chatted_users), distinct=True
+        "members",
+        filter=Q(members__in=most_chatted_users),
+        distinct=True,
     )
     user_rooms_ids = user.room_set.all().values_list("id", flat=True)
     already_joined = Case(
@@ -262,6 +286,9 @@ def get_all_chats(user, question):
         .annotate(num_members=num_members)
         .annotate(num_members_online=num_members_online)
         .annotate(num_blocked_users=num_blocked_users)
+        .annotate(
+            num_most_chatted_users_of_most_chatted_users=num_most_chatted_users_of_most_chatted_users
+        )
         .annotate(num_most_chatted_users=num_most_chatted_users)
         .annotate(latest_message_timestamp=latest_message_timestamp)
         .annotate(already_joined=already_joined)
@@ -272,6 +299,7 @@ def get_all_chats(user, question):
         )
         .order_by(
             "already_joined",
+            "-num_most_chatted_users_of_most_chatted_users",
             "-num_most_chatted_users",
             "-num_members_online",
             F("latest_message_timestamp").desc(nulls_last=True),
