@@ -11,7 +11,10 @@ from django.db.models import (
     OuterRef,
     Max,
     BooleanField,
+    FloatField,
 )
+from django.db.models.functions import Cast
+from django.db.models.lookups import GreaterThan
 from firebase_admin.auth import delete_user as delete_firebase_user
 
 from blabhere.models import Room, Message, User, Conversation, ReportedChat
@@ -146,8 +149,24 @@ def get_active_questions(user):
     num_members_online = Count(
         "members", filter=Q(members__is_online=True), distinct=True
     )
+    num_messages = Count("message", distinct=True)
+    num_your_messages = Count("message", filter=Q(message__creator=user), distinct=True)
+    reflectivity = Case(
+        When(
+            GreaterThan(F("num_your_messages"), 0)
+            & GreaterThan(F("num_messages"), 0)
+            & ~Q(num_your_messages=F("num_messages")),
+            then=Cast(F("num_your_messages"), FloatField())
+            / Cast(F("num_messages"), FloatField()),
+        ),
+        default=0,
+        output_field=FloatField(),
+    )
     rooms = (
         Room.objects.annotate(num_members=num_members)
+        .annotate(num_messages=num_messages)
+        .annotate(num_your_messages=num_your_messages)
+        .annotate(reflectivity=reflectivity)
         .annotate(num_members_online=num_members_online)
         .annotate(num_blocked_users=num_blocked_users)
         .annotate(latest_msg=Max("message__created_at"))
@@ -156,6 +175,9 @@ def get_active_questions(user):
             num_blocked_users=0,
         )
         .order_by(
+            "-reflectivity",
+            "-num_your_messages",
+            "-num_messages",
             "-num_members_online",
             F("latest_msg").desc(nulls_last=True),
             "-created_at",
@@ -184,9 +206,25 @@ def get_all_chats(user, question):
         .order_by("-created_at")
         .values("created_at")[:1]
     )
+    num_messages = Count("message", distinct=True)
+    num_your_messages = Count("message", filter=Q(message__creator=user), distinct=True)
+    reflectivity = Case(
+        When(
+            GreaterThan(F("num_your_messages"), 0)
+            & GreaterThan(F("num_messages"), 0)
+            & ~Q(num_your_messages=F("num_messages")),
+            then=Cast(F("num_your_messages"), FloatField())
+            / Cast(F("num_messages"), FloatField()),
+        ),
+        default=0,
+        output_field=FloatField(),
+    )
     rooms = (
         Room.objects.all()
         .annotate(num_members=num_members)
+        .annotate(num_messages=num_messages)
+        .annotate(num_your_messages=num_your_messages)
+        .annotate(reflectivity=reflectivity)
         .annotate(num_members_online=num_members_online)
         .annotate(num_blocked_users=num_blocked_users)
         .annotate(latest_message_timestamp=latest_message_timestamp)
@@ -198,6 +236,9 @@ def get_all_chats(user, question):
         )
         .order_by(
             "already_joined",
+            "-reflectivity",
+            "-num_your_messages",
+            "-num_messages",
             "-num_members_online",
             F("latest_message_timestamp").desc(nulls_last=True),
             "-created_at",
