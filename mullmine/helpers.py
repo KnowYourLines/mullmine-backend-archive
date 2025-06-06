@@ -17,7 +17,7 @@ from django.db.models.functions import Cast
 from django.db.models.lookups import GreaterThan
 from firebase_admin.auth import delete_user as delete_firebase_user
 
-from blabhere.models import Room, Message, User, Conversation, ReportedChat
+from mullmine.models import Room, Message, User, Conversation, ReportedChat
 
 NUM_MESSAGES_PER_PAGE = 10
 FULL_ROOM_NUM_MEMBERS = 10

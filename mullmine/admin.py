@@ -2,7 +2,7 @@ from django.contrib import admin
 from firebase_admin.auth import delete_user, delete_users
 from django.utils.translation import gettext_lazy as _
 
-from blabhere.models import User, ReportedChat, Room
+from mullmine.models import User, ReportedChat, Room
 
 
 class ReportedUserListFilter(admin.SimpleListFilter):

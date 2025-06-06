@@ -47,7 +47,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "channels",
     "corsheaders",
-    "blabhere",
+    "mullmine",
 ]
 
 MIDDLEWARE = [
@@ -132,7 +132,7 @@ STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-AUTH_USER_MODEL = "blabhere.User"
+AUTH_USER_MODEL = "mullmine.User"
 
 LOCAL = bool(os.environ.get("LOCAL") == "True")
 

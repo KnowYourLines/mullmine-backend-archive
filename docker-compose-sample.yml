@@ -11,7 +11,7 @@ services:
       - "6379:6379"
   web:
     build: .
-    command: bash -c 'while !</dev/tcp/db/5432; do sleep 1; done; python manage.py makemigrations blabhere; python manage.py migrate; python manage.py collectstatic --no-input; daphne server.asgi:application --port 8000 --bind 0.0.0.0'
+    command: bash -c 'while !</dev/tcp/db/5432; do sleep 1; done; python manage.py makemigrations mullmine; python manage.py migrate; python manage.py collectstatic --no-input; daphne server.asgi:application --port 8000 --bind 0.0.0.0'
     volumes:
       - .:/code
     ports:

@@ -5,7 +5,7 @@ import logging
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
-from blabhere.helpers import (
+from mullmine.helpers import (
     add_user_to_room,
     get_room,
     get_prev_messages,

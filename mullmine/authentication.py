@@ -7,8 +7,8 @@ from channels.auth import AuthMiddlewareStack
 from channels.db import database_sync_to_async
 from firebase_admin import auth, credentials
 
-from blabhere.exceptions import InvalidFirebaseAuthToken, FirebaseAuthError
-from blabhere.models import User
+from mullmine.exceptions import InvalidFirebaseAuthToken, FirebaseAuthError
+from mullmine.models import User
 
 logger = logging.getLogger(__name__)
 cred = credentials.Certificate(

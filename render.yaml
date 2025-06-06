@@ -1,23 +1,23 @@
 services:
   - type: web
-    name: blabhere-frontend
-    repo: https://github.com/KnowYourLines/blabhere-frontend.git
+    name: mullmine-frontend
+    repo: https://github.com/KnowYourLines/mullmine-frontend.git
     env: static
     buildCommand: ./render.sh
     staticPublishPath: dist
     domains:
-      - blabhere.com
+      - mullmine.com
 
   - type: redis
-    name: blabhere-redis
+    name: mullmine-redis
     region: ohio
     plan: free
     ipAllowList: [] # only allow internal connections
 
   - type: web
-    name: blabhere-backend
+    name: mullmine-backend
     runtime: docker
-    repo: https://github.com/KnowYourLines/blabhere-backend.git
+    repo: https://github.com/KnowYourLines/mullmine-backend.git
     region: ohio
     plan: starter
     branch: main
@@ -32,17 +32,17 @@ services:
       - key: LOCAL
         value: False
       - key: ALLOWED_HOSTS
-        value: blabhere.com
+        value: mullmine.com
       - key: CORS_ALLOWED_ORIGINS
-        value: https://blabhere.com
+        value: https://mullmine.com
       - key: DATABASE_URL
         fromDatabase:
-          name: blabhere-db
+          name: mullmine-db
           property: connectionString
       - key: REDIS_URL
         fromService:
           type: redis
-          name: blabhere-redis
+          name: mullmine-redis
           property: connectionString
       - key: FIREBASE_PROJECT_ID
         sync: false
@@ -58,7 +58,7 @@ services:
         sync: false
 
 databases:
-  - name: blabhere-db
+  - name: mullmine-db
     plan: free
     region: ohio
     postgresMajorVersion: 14
