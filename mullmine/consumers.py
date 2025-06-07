@@ -331,7 +331,8 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         )
 
     async def create_room(self, input_payload):
-        if self.user.is_verified:
+        creator = await database_sync_to_async(get_user)(self.user.username)
+        if creator.is_verified:
             question = input_payload.get("question")
             room_payload = await database_sync_to_async(create_room)(question)
             if self.room_id:

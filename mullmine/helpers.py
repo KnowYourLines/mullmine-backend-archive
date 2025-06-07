@@ -269,6 +269,7 @@ def suggest_questions(user, question):
 
 
 def initialize_room(room_id, user):
+    user = User.objects.get(username=user.username)
     if user.is_verified:
         if room_id:
             try:
