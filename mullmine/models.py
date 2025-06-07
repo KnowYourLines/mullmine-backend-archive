@@ -8,7 +8,6 @@ class User(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     display_name = models.CharField(max_length=150, unique=True)
     is_verified = models.BooleanField(default=False)
-    agreed_terms_and_privacy = models.BooleanField(default=False)
     blocked_users = models.ManyToManyField("self")
     reported_users = models.ManyToManyField(
         "self", related_name="reported_by", symmetrical=False

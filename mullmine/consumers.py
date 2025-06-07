@@ -21,8 +21,6 @@ from mullmine.helpers import (
     read_unread_conversation,
     leave_room,
     check_room_full,
-    get_user_agreed_terms,
-    agree_terms,
     block_room_user,
     report_room_user,
     delete_user,
@@ -62,15 +60,6 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
             {"type": "conversations", "conversations": conversations},
         )
 
-    async def fetch_agreed_terms_and_privacy(self):
-        agreed_terms = await database_sync_to_async(get_user_agreed_terms)(
-            self.user.username
-        )
-        await self.channel_layer.send(
-            self.channel_name,
-            {"type": "agreed_terms", "agreed_terms": agreed_terms},
-        )
-
     async def exit_room(self, input_payload):
         usernames = await database_sync_to_async(get_all_member_usernames)(
             input_payload["room_id"]
@@ -107,7 +96,6 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
             await self.go_online()
             await self.fetch_conversations()
             await self.fetch_display_name()
-            await self.fetch_agreed_terms_and_privacy()
         else:
             await self.close()
 
@@ -166,10 +154,6 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
                     },
                 )
 
-    async def agree_terms(self):
-        await database_sync_to_async(agree_terms)(self.user.username)
-        await self.fetch_agreed_terms_and_privacy()
-
     async def delete_account(self):
         await database_sync_to_async(delete_user)(self.user)
 
@@ -179,8 +163,6 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
                 asyncio.create_task(self.exit_room(content))
             if content.get("command") == "update_display_name":
                 asyncio.create_task(self.update_display_name(content))
-            if content.get("command") == "agree_terms":
-                asyncio.create_task(self.agree_terms())
             if content.get("command") == "delete_account":
                 asyncio.create_task(self.delete_account())
 
@@ -193,10 +175,6 @@ class UserConsumer(AsyncJsonWebsocketConsumer):
         await self.send_json(event)
 
     async def conversations(self, event):
-        # Send message to WebSocket
-        await self.send_json(event)
-
-    async def agreed_terms(self, event):
         # Send message to WebSocket
         await self.send_json(event)
 

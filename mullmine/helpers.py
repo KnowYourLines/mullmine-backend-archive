@@ -74,15 +74,6 @@ def report_room_user(room_id, user, username):
             log_reported_chat(room, user, reported_user)
 
 
-def get_user_agreed_terms(username):
-    user = User.objects.get(username=username)
-    return user.agreed_terms_and_privacy
-
-
-def agree_terms(username):
-    User.objects.filter(username=username).update(agreed_terms_and_privacy=True)
-
-
 def leave_room(user, room_id):
     room_to_leave = Room.objects.get(id=room_id)
     if user in room_to_leave.members.all():
