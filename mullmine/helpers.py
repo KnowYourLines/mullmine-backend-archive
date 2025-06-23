@@ -1,5 +1,6 @@
 import logging
 
+from django.contrib.postgres.aggregates import ArrayAgg
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
 from django.db.models import (
@@ -8,16 +9,19 @@ from django.db.models import (
     Q,
     Case,
     When,
+    FloatField,
     OuterRef,
     Max,
     BooleanField,
 )
+from django.db.models.functions import Cast
+from django.db.models.lookups import GreaterThan
 from firebase_admin.auth import delete_user as delete_firebase_user
 
 from mullmine.models import Room, Message, User, Conversation, ReportedChat
 
 NUM_MESSAGES_PER_PAGE = 10
-FULL_ROOM_NUM_MEMBERS = 10
+FULL_ROOM_NUM_MEMBERS = 5
 
 
 def create_room(question):
